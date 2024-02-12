@@ -141,10 +141,11 @@ class FetchData(object):
         mutDF = pd.crosstab( all_mut_data['TUMOR_SAMPLE_BARCODE'], [ all_mut_data['MUT_HGVSP']], dropna=False).astype(int)
         # if count is greater than 2 set to 1, else 0
         mutDF.iloc[:,1:] = mutDF.iloc[:,1:].applymap(lambda x: 1 if x >= 2 else 0)
+        mutDF = mutDF.loc[:, pd.notnull(mutDF.columns)]
         length=len(names)
         for name in range(length):
             # sum across rows where col matches any of mutations in list muts
-            mutDF[names[name]] = mutDF.filter(items=muts[name]).sum(1)
+            mutDF[names[name]] = mutDF.loc[:, mutDF.columns.str.startswith(tuple(muts[name]))].sum(1)
             # do this for each mut list
         mutDF['TUMOR_SAMPLE_BARCODE'] = mutDF.index
         mutDF.index.name = None
