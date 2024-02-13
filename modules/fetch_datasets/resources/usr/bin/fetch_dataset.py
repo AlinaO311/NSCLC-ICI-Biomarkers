@@ -3,16 +3,16 @@
 # Import packages:
 import argparse
 import json
-import yaml
+import json
+import ruamel.yaml
 import os
 import re
 import pandas as pd
-import numpy as np
 import glob
-import argparse
 import difflib
 from datetime import datetime
 from itertools import chain
+
 
 path_list = []
 patientSets = {}
@@ -21,19 +21,17 @@ mutSets = {}
 file_inlist = ['data_clinical_patient.txt','data_clinical_sample.txt','data_mutations.txt']
 cwd=os.getcwd().split('work', 1)[0]
 
-# Create a list of study data included in Data folder
-## takes in list of datasets
 class FetchData(object):
     def __init__(self, dataSets, mutationLists):
-        self.data = dataSets
-        self.mutations = mutationLists
+        	self.data = dataSets
+       		self.mutations = mutationLists
     def _get_data(self):
         print("Data directories included:")
         for study in self.data:
             print(study)
-            for entry in os.listdir(os.path.join('./Data', study)):
-                    if entry in file_inlist:
-                        path_list.append(os.path.join('./Data', study , entry) )
+            for entry in os.listdir(os.path.join(cwd ,'Data', study)):
+                   if entry in file_inlist:
+                       path_list.append(os.path.join(cwd , 'Data', study , entry) )
         for file_path in path_list:
             if 'patient' in file_path and os.path.isfile(file_path):
             # Read data files:
@@ -48,10 +46,11 @@ class FetchData(object):
                 df = pd.read_csv(file_path, comment='#',header=0, delimiter='\t', low_memory=False)
                 mutSets[file_path] = df
                 print("Successfully read: " + file_path)
-
+        return patientSets, sampleSets, mutSets 
     def _harmonize(self, patientSets, sampleSets, mutSets):
         # read in feature list
-        feature_file = open(os.path.join(cwd , 'Data/features_v1.txt'), "r") ###TODO: mod to allow user input? or allow what type specs        # reading the file 
+        feature_file = open(os.path.join(cwd , 'Data/features_v1.txt'), "r") ###TODO: mod to allow user input? or allow what type specs
+        # reading the file 
         feature_read = feature_file.read() 
         # replacing end splitting the text when newline ('\n') is seen, remove empty str. 
         feat_list = list(filter(None, feature_read.split("\n") ))
@@ -98,10 +97,7 @@ class FetchData(object):
             for i in torename:
                 columns = torename[i].columns
                 torename[i].columns = [x.upper() for x in columns]
-                #torename[i].apply(lambda x: x.astype(str).str.upper())
                 torename[i] = torename[i].rename(columns=col_map)
-            #            torename[i] = torename[i].rename(columns={j:k})
-                           # df[(df[list(result)] == list(result.values())).all(axis=1)]
         def concatinate_dfs(df_dict, filterCols):
             dfs_to_concat, dfs =[], []
             #add study name col
@@ -113,7 +109,7 @@ class FetchData(object):
                 dfs.append(df)
                 for df in dfs:
                     df = df.loc[:, ~df.columns.duplicated(keep='first')]
-                    dfs_to_concat.append(df) 
+                    dfs_to_concat.append(df)
             concatinated_df = pd.concat(dfs_to_concat, ignore_index = True)
             concatinated_df = concatinated_df.filter(filterCols)
             return concatinated_df
@@ -137,27 +133,27 @@ class FetchData(object):
         m_lst = [ ele for ele in [l.split(',') for l in ','.join(mut_list).split('\n')] if ele != ['']]
         # replace string before = in each element within each list and strip whitespace
         muts = [[re.sub('\w+[=]+', '', y).strip() for y in x] for x in m_lst]
+        # create concat column from HUGO_SYMBOL and HGVSP (protein mod/consequence)
         all_mut_data['MUT_HGVSP'] = all_mut_data['HUGO_SYMBOL']+'_'+all_mut_data['HGVSP']
-        mutDF = pd.crosstab( all_mut_data['TUMOR_SAMPLE_BARCODE'], [ all_mut_data['MUT_HGVSP']], dropna=False).astype(int)
+        # Count the occurrence of each Mut/consequence for each Sample_ID
+        mutDF = pd.crosstab( all_mut_data['TUMOR_SAMPLE_BARCODE'], all_mut_data['MUT_HGVSP'], dropna=False).astype(int)
         # if count is greater than 2 set to 1, else 0
         mutDF.iloc[:,1:] = mutDF.iloc[:,1:].applymap(lambda x: 1 if x >= 2 else 0)
-        mutDF = mutDF.loc[:, pd.notnull(mutDF.columns)]
         length=len(names)
         for name in range(length):
             # sum across rows where col matches any of mutations in list muts
-            mutDF[names[name]] = mutDF.loc[:, mutDF.columns.str.startswith(tuple(muts[name]))].sum(1)
-            # do this for each mut list
+            mutDF[names[name]] = mutDF.filter(items=muts[name]).sum(1)
         mutDF['TUMOR_SAMPLE_BARCODE'] = mutDF.index
         mutDF.index.name = None
         mutationMerged_dict = all_sample_data.merge(mutDF.rename(columns={'TUMOR_SAMPLE_BARCODE': 'SAMPLE_ID'}), 'left')
-        #print(mutationMerged_dict)
         getCols = [cols for cols in mutationMerged_dict for col in list(set(chain(*muts)))+names if col == cols]
         mutationMerged_dict = mutationMerged_dict.loc[:,['PATIENT_ID','SAMPLE_ID']].join(mutationMerged_dict.loc[:,getCols].fillna(0).astype(int))
         # Combine all data:
         patient_sample_data = pd.merge(all_clinical_data, mutationMerged_dict.merge(all_mut_data.rename(columns={'TUMOR_SAMPLE_BARCODE': 'SAMPLE_ID'}), 'left') , on=['PATIENT_ID','STUDY_NAME'], how='left')
+        patient_sample_data = patient_sample_data.drop('HUGO_SYMBOL', axis=1)
         return patient_sample_data
 
-def Harmonize(self):
+def Harmonize(self, *args):
     print("Getting Datasets...")
     clinical_set, sample_set, mutations_set  = FetchData(self, *args)._get_data()
     print("Harmonizing Data...")
@@ -169,28 +165,29 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Harmonize Datasets')
     ## which studies to use for analysis
     parser.add_argument('--dataset_names', help='Which datasets to use', required=False, type=lambda t: [s.strip() for s in t.split(',')], default='luad_mskcc_2015,nsclc_mskcc_2015,luad_mskcc_2020,nsclc_mskcc_2018')
-    # user provided name for each run
+    # user provided name for each run 
     parser.add_argument('--datatype', help='numerical or categorical', required=True)
     parser.add_argument('--mutations', help='File of mutations of interest', required=False, default='mutations.txt')
     # user provided test_set_size:
-    parser.add_argument('--test_set_size', help='test set size, default: 0.2', required=False)
+    parser.add_argument('--test_set_size', help='test set size, default: 0.2', required=False, default=0.2)
     # user provided seed
-    parser.add_argument('--random_seed', help='random seed, default: 42', required=False)
+    parser.add_argument('--random_seed', help='random seed, default: 42', required=False, default=42)
     parser.add_argument('--outdir', help='output directory, default: results', required=False)
-    args = parser.parse_args()
 
+    args = parser.parse_args()
     datasets = []
     for study in args.dataset_names:
         print(study)
         datasets.append(study)
-    
-    mydatetime = datetime.now().strftime('%b%d%Y')+'_'+datetime.now().strftime('%H%M%S')
     inputdata = Harmonize(datasets, args.mutations)
+    print('Features from Data', inputdata.columns.tolist())
 
+    mydatetime = datetime.now().strftime("%Y%m%d-%H%M")
     # save data
-    inputdata.to_csv('data_'+mydatetime+'.tsv' , sep='\t') 
+    inputdata.to_csv('data_'+mydatetime+'.tsv' , sep='\t',  index=False)
+    yaml = ruamel.yaml.YAML()
 
-    # save config
+    # save config 
     if args.datatype == "numerical":
         config = {
             'preprocessor_name': "main_preprocessor",
@@ -200,6 +197,9 @@ if __name__ == '__main__':
 
             'data_path': os.path.join(cwd, args.outdir ,'DataPrep','data_'+mydatetime+'.tsv')
         }
+        json_string = json.dumps(config)
+        data = yaml.load(json_string)
+        data.fa.set_block_style()
         with open("preprocess_config.yml", 'w') as f:
             yaml.dump(config, f)
     else:
@@ -211,6 +211,9 @@ if __name__ == '__main__':
 
             'data_path': os.path.join(cwd , args.outdir  ,'DataPrep','data_'+mydatetime+'.tsv')
         }
+        json_string = json.dumps(config)
+        data = yaml.load(json_string)
+        data.fa.set_block_style()
         with open("preprocess_config.yml", 'w') as f:
             yaml.dump(config, f)
     # save metadata
@@ -223,3 +226,5 @@ if __name__ == '__main__':
     }
     with open("meta.json", 'w') as f:
         json.dump(meta, f)
+
+
