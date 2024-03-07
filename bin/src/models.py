@@ -12,6 +12,8 @@ import pandas as pd
 import xgboost as xgb
 from sklearn.model_selection import KFold, cross_val_score
 from tensorflow import keras
+from dask.distributed import Client
+from dask.dataframe import from_pandas
 
 XGBOOST_MODEL_NAME = "xgboost"
 KERAS_MODEL_NAME = "keras_feed_forward"
@@ -94,15 +96,50 @@ class XGBoost(BaseModel):
             x_train -- The training data set.
             y_train -- The corresponding ground truth.
         """
+        ddf = from_pandas(x_train, npartitions=3)
+        client = Client()
+        dtrain = xgb.dask.DaskDMatrix(client, ddf.iloc[:, :-1], ddf.iloc[:, -1])
 
-        self.model.fit(x_train, y_train)
+        #self.model.fit(x_train, y_train)
+        # Perform cross-validation using xgb.dask.cv
+        cv_results = xgb.dask.cv(client,
+                                 **self.config["args"],
+                                 dtrain,
+                                 num_boost_round=10,
+                                 nfold=5,
+                                 metrics={'error'},
+                                 early_stopping_rounds=10)
 
-        scores = cross_val_score(self.model, x_train, y_train, cv=5)
-        print("Mean cross-validation score: %.2f" % scores.mean())
+        # After determining the best parameters, train the final model
+        final_model = xgb.dask.train(client,
+                                     **self.config["args"],
+                                     dtrain,
+                                     num_boost_round=10)  # Adjust num_boost_round based on CV results
 
+        print("Final model:", final_model)
+
+        # If you want to perform a K-fold CV with a specific number of splits and shuffling
         kfold = KFold(n_splits=10, shuffle=True)
-        kf_cv_scores = cross_val_score(self.model, x_train, y_train, cv=kfold)
-        print("K-fold CV average score: %.2f" % kf_cv_scores.mean())
+        folds = [(train_index, test_index) for train_index, test_index in kfold.split(x_train)]
+
+        mean_error = cv_results['test-error-mean'].mean()
+        print("Mean cross-validation score: %.2f" % mean_error)
+
+        # Extract the mean error of the last boosting round
+        mean_error_last_round = cv_results['test-error-mean'].iloc[-1]
+        print("Mean CV Error (last round):", mean_error_last_round)
+
+        # Perform K-fold CV using xgb.dask.cv with custom folds
+        kf_cv_results = xgb.dask.cv(client,
+                                    **self.config["args"],
+                                    dtrain,
+                                    num_boost_round=10,
+                                    folds=folds,
+                                    metrics={'error'},
+                                    early_stopping_rounds=10)
+
+        average_kfold_cv_score = kf_cv_results['test-error-mean'][-1]
+        print("Average k-Fold CV Score (Error Metric):", average_kfold_cv_score)
 
     def explain_weights(self) -> str:
         """Returns an eli5 explanation of the model.
