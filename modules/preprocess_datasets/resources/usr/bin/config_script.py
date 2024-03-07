@@ -45,8 +45,13 @@ if __name__ == "__main__":
                 random_seed:
                 model: xgboost
                 args: {
-                         tree_method: hist,
-                         enable_categorical: True
+                        objective: binary:logistic,
+                        max_depth: 6,
+                        eta: 0.3,
+                        tree_method: hist,
+                        enable_categorical: True
+                        subsample: 0.8,  # Adjust according to your dataset and preference
+                        colsample_bytree: 0.6
                         }
                 preprocessed_data_path:
                 gt_column: "PFS_STATUS"
