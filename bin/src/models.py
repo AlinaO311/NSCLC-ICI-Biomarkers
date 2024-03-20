@@ -14,6 +14,8 @@ from sklearn.model_selection import KFold, cross_val_score
 from tensorflow import keras
 from dask.distributed import Client
 from dask.dataframe import from_pandas
+import dask_ml.model_selection as dms
+
 
 XGBOOST_MODEL_NAME = "xgboost"
 KERAS_MODEL_NAME = "keras_feed_forward"
@@ -96,50 +98,46 @@ class XGBoost(BaseModel):
             x_train -- The training data set.
             y_train -- The corresponding ground truth.
         """
+        ## create dask Data Matrix with Client 
         ddf = from_pandas(x_train, npartitions=3)
+        y_ddf = from_pandas(y_train, npartitions=3)
         client = Client()
-        dtrain = xgb.dask.DaskDMatrix(client, ddf.iloc[:, :-1], ddf.iloc[:, -1])
-
-        #self.model.fit(x_train, y_train)
-        # Perform cross-validation using xgb.dask.cv
-        cv_results = xgb.dask.cv(client,
-                                 **self.config["args"],
-                                 dtrain,
-                                 num_boost_round=10,
-                                 nfold=5,
-                                 metrics={'error'},
-                                 early_stopping_rounds=10)
-
-        # After determining the best parameters, train the final model
-        final_model = xgb.dask.train(client,
-                                     **self.config["args"],
-                                     dtrain,
-                                     num_boost_round=10)  # Adjust num_boost_round based on CV results
-
-        print("Final model:", final_model)
-
-        # If you want to perform a K-fold CV with a specific number of splits and shuffling
-        kfold = KFold(n_splits=10, shuffle=True)
-        folds = [(train_index, test_index) for train_index, test_index in kfold.split(x_train)]
-
-        mean_error = cv_results['test-error-mean'].mean()
-        print("Mean cross-validation score: %.2f" % mean_error)
-
-        # Extract the mean error of the last boosting round
-        mean_error_last_round = cv_results['test-error-mean'].iloc[-1]
-        print("Mean CV Error (last round):", mean_error_last_round)
+        dtrain = xgb.dask.DaskDMatrix(client, ddf, y_ddf)
 
         # Perform K-fold CV using xgb.dask.cv with custom folds
-        kf_cv_results = xgb.dask.cv(client,
-                                    **self.config["args"],
-                                    dtrain,
-                                    num_boost_round=10,
-                                    folds=folds,
-                                    metrics={'error'},
-                                    early_stopping_rounds=10)
+        kf = dms.model_selection.KFold(n_splits=10, shuffle=True, random_state=self.config["random_seed"])
 
-        average_kfold_cv_score = kf_cv_results['test-error-mean'][-1]
-        print("Average k-Fold CV Score (Error Metric):", average_kfold_cv_score)
+        # Placeholder for cross-validation scores
+        cv_scores = []
+
+        for train_index, test_index in kf.split(ddf):
+            # Splitting the data
+            X_train, X_test = ddf.iloc[train_index], ddf.iloc[test_index]
+            y_train, y_test = y_ddf.iloc[train_index], y_ddf.iloc[test_index]
+
+            # Convert to DaskDMatrix
+            dtrain = xgb.dask.DaskDMatrix(client, X_train, y_train)
+            dtest = xgb.dask.DaskDMatrix(client, X_test, y_test)
+
+            # Train model
+            d_model = xgb.dask.train(client,
+                                   params=self.config["args"],
+                                   dtrain=dtrain,
+                                   num_boost_round=10,  # Adjust based on CV results
+                                   **self.config["args"])
+            
+            print("K fold model trained: " , d_model)
+
+            # Evaluate model
+            predictions = xgb.dask.predict(client, d_model, dtest)
+            # Assuming a regression problem, replace with appropriate evaluation function
+            score = ((y_test - predictions) ** 2).mean().compute()
+            cv_scores.append(score)
+        
+        # Calculate average score across all folds
+        average_score = sum(cv_scores) / len(cv_scores)
+        print(f"Average Score: {average_score}") 
+
 
     def explain_weights(self) -> str:
         """Returns an eli5 explanation of the model.
@@ -159,7 +157,19 @@ class XGBoost(BaseModel):
         Returns:
             A Pandas dataframe with the predicted values.
         """
-        return self.model.predict(x_test)
+        ddf = from_pandas(x_test, npartitions=3)
+        client = Client()
+        dtest = xgb.dask.DaskDMatrix(client, ddf)
+        print('Here is model used for prediction: ', self.model)
+        predictions_dask_array = xgb.dask.predict(client, self.model, dtest)
+
+        # Compute the Dask Array to get the actual predictions as a NumPy array
+        predictions_numpy_array = predictions_dask_array.compute()
+
+        # Convert the NumPy array to a Pandas DataFrame
+        predictions_df = pd.DataFrame(predictions_numpy_array, columns=['Predictions'])
+
+        return predictions_df
 
     def save_model(self, directory: Path) -> None:
         """Save the model at the specified location.

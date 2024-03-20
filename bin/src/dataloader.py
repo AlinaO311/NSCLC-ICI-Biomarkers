@@ -46,6 +46,7 @@ class DataLoader:
 
     def get_data(self) -> pd.DataFrame:
         """Return predictor columns as a Pandas dataframe."""
+        
         return self.data.drop(columns=[self.gt_column])
 
     def get_ground_truth(self) -> pd.DataFrame:
