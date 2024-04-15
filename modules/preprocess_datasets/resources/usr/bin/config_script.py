@@ -49,8 +49,8 @@ if __name__ == "__main__":
                         max_depth: 6,
                         eta: 0.3,
                         tree_method: hist,
-                        enable_categorical: True
-                        subsample: 0.8,  # Adjust according to your dataset and preference
+                        enable_categorical: True,
+                        subsample: 0.8,  
                         colsample_bytree: 0.6
                         }
                 preprocessed_data_path:
@@ -61,6 +61,25 @@ if __name__ == "__main__":
         yaml_dump = yaml.load(yml_dict)
         yaml_dump['random_seed'] = config_to_load['random_seed']
         yaml_dump['preprocessed_data_path'] = latest_file
+        def format_lists_in_block_style_if_colon_found(val):
+            """Convert all lists with a ':' in them to block style."""
+            if isinstance(val, list):
+                for ind, ele in enumerate(val):
+                    ele = format_lists_in_block_style_if_colon_found(ele)
+                    if isinstance(ele, str) and ':' in ele:
+                        val._yaml_format.set_block_style()  # most important
+                        # this ScalarString format step is optional if only using ruamel, but mandatory if using pyyaml CLoader.
+                        if '"' in ele:  # for readability.
+                            ele = ruamel.yaml.scalarstring.SingleQuotedScalarString(ele)
+                        else:
+                            ele = ruamel.yaml.scalarstring.DoubleQuotedScalarString(ele)
+                    val[ind] = ele
+            elif isinstance(val, dict):
+                for k in val:
+                    val[k] = format_lists_in_block_style_if_colon_found(val[k])
+            return val
+        yaml_dump = format_lists_in_block_style_if_colon_found(yaml_dump)
+
         with open("xgboost_model_config.yml", 'w') as f:
              yaml.dump(yaml_dump, f)
     else:
