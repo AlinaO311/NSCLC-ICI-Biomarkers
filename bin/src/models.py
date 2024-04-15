@@ -13,6 +13,7 @@ import xgboost as xgb
 from sklearn.model_selection import KFold, cross_val_score
 from tensorflow import keras
 from dask.distributed import Client
+
 from dask.dataframe import from_pandas
 import dask_ml.model_selection as dms
 
@@ -99,9 +100,20 @@ class XGBoost(BaseModel):
             y_train -- The corresponding ground truth.
         """
         ## create dask Data Matrix with Client 
-        ddf = from_pandas(x_train, npartitions=3)
-        y_ddf = from_pandas(y_train, npartitions=3)
-        client = Client()
+        client = Client(n_workers=10, threads_per_worker=2, memory_limit='5GB')
+        print('starting client ', client)
+        total_memory = x_train.memory_usage(index=True).sum()
+        print('here is x_train size', total_memory)
+        print('starting client ', client)
+
+        # Desired max size per partition (1GB)
+        max_partition_size = 1073741824
+        parts_split = (int(total_memory) + int(max_partition_size) - 1) // (max_partition_size)  # Ceiling division
+        print('number of partitions', parts_split)
+        ddf = from_pandas(x_train, npartitions=parts_split)
+        print('ddf partitions ', ddf.npartitions)
+        y_ddf = from_pandas(y_train, npartitions=parts_split)
+
         dtrain = xgb.dask.DaskDMatrix(client, ddf, y_ddf)
 
         # Perform K-fold CV using xgb.dask.cv with custom folds
