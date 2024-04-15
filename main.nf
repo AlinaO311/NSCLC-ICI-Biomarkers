@@ -1,4 +1,4 @@
-ch_train_model_config#!/usr/bin/env nextflow 
+#!/usr/bin/env nextflow 
 
 /*
  * Copyright (c) 2023, Clinical Genomics.
@@ -28,7 +28,7 @@ log.info """\
         mutations_data  : ${params.mutations_data}
 
         preprocess	: ${params.preprocess}
-        preproc_data    : ${params.preproc_data_folder}
+        preproc_data    : ${params.preproc_data}
         remove_cols     : ${params.cols_to_remove}
         model_type      : ${params.model_type}
 
@@ -86,8 +86,8 @@ workflow {
 
 	    mut_file = mut_file.collect()
 
-        (ch_config, ch_data) = fetch_dataset(params.dataset_names, params.datatype, params.mutations_data, datetime_string)
-        print(ch_config)
+        (ch_preproc_config, ch_data) = fetch_dataset(params.dataset_names, params.datatype, params.mutations_data, datetime_string)
+        print(ch_preproc_config)
         ch_data.view()
     }
     // otherwise load input files: need DataPrep/*.tsv & config
@@ -99,14 +99,14 @@ workflow {
     // preprocess data sets
     if ( params.preprocess == true ) {
         // if preprocess of dataset needed for categorical processing, creating train/test sets
-        (ch_preproc_config, ch_train_config, ch_train_data, ch_test_data)  = preprocess_datasets(ch_config, params.cols_to_remove, params.model_type, datetime_string) 
+        (ch_preproc_config, ch_train_config, ch_train_data, ch_test_data)  = preprocess_datasets(ch_preproc_config, params.cols_to_remove, params.model_type, datetime_string) 
         ch_train_config.view()
        // PRINT_PATH()
     } // else load previously generated train, test sets
     else {
         ch_train_config = Channel.fromPath("${params.output_dir}/configs/models/*.yml",  checkIfExists: true )
-        ch_train_data = Channel.fromPath("${params.output_dir}/Modelling/data/preprocessed/${params.preproc_data_folder}/data/train_data.csv")
-        ch_test_data = Channel.fromPath("${params.output_dir}/Modelling/data/preprocessed/${params.preproc_data_folder}/data/test_data.csv")
+        ch_train_data = Channel.fromPath("${params.output_dir}/Modelling/data/preprocessed/${params.preproc_data}/data/train_data.csv")
+        ch_test_data = Channel.fromPath("${params.output_dir}/Modelling/data/preprocessed/${params.preproc_data}/data/test_data.csv")
         print(ch_train_config)
     }
     
@@ -126,9 +126,9 @@ workflow {
         ch_model_to_infer_config.view()
         }
     
-    infer_conf = ch_model_to_infer_config.collect()
-    test_data = ch_test_data.collect()
-    infer_conf.view()
+ //   infer_conf = ch_model_to_infer_config.collect()
+   // test_data = ch_test_data.collect()
+   // infer_conf.view()
 
     // perform prediction and inference if specified
     if ( params.infer_from_data == true && params.exp_name == "") {
