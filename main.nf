@@ -1,4 +1,4 @@
-#!/usr/bin/env nextflow 
+ch_train_model_config#!/usr/bin/env nextflow 
 
 /*
  * Copyright (c) 2023, Clinical Genomics.
@@ -19,7 +19,7 @@ include { analyze_dataset } from './modules/analyze_dataset'
 log.info """\
         NSCLC-ICI pipeline
         ===============
-        fetch_datasets  : ${params.fetch_dataset}
+        fetch_dataset  : ${params.fetch_dataset}
         dataset_names   : ${params.dataset_names}
         datatype        : ${params.datatype}
 
@@ -34,7 +34,7 @@ log.info """\
 
         train           : ${params.train}
 
-        predict         : ${params.predict}
+        infer_from_data : ${params.predict}
         predict_models  : ${params.predict_models}
         predict_train   : ${params.predict_train}
         predict_test    : ${params.predict_test}
@@ -61,8 +61,20 @@ process PRINT_PATH {
   """
 }
 
+process GetDateTimeAsString {
+    output:
+    stdout 
+
+    script:
+    """
+    datetime=\$(date +%y%m%d-%H%M%S)
+    echo \$datetime
+    """
+}
 
 workflow {
+    datetime_string = GetDateTimeAsString()
+     
     mut_file	   = Channel.fromPath("${params.mutations_data}")
     
     // fetch example datasets if none specified
@@ -74,26 +86,25 @@ workflow {
 
 	    mut_file = mut_file.collect()
 
-        (ch_config, ch_data) = fetch_dataset(params.dataset_names, params.datatype, params.mutations_data)
+        (ch_config, ch_data) = fetch_dataset(params.dataset_names, params.datatype, params.mutations_data, datetime_string)
         print(ch_config)
         ch_data.view()
     }
     // otherwise load input files: need DataPrep/*.tsv & config
     else {
-        ch_data = Channel.fromPath("${params.output_dir}/DataPrep/*.tsv")
-        ch_config = Channel.fromPath("${params.output_dir}/configs/preprocess/*.yml")
+        ch_preproc_config = Channel.fromPath("${params.output_dir}/configs/preprocess/*.yml")
     }
 
-
+    
     // preprocess data sets
     if ( params.preprocess == true ) {
         // if preprocess of dataset needed for categorical processing, creating train/test sets
-        (ch_preproc_config, ch_train_config, ch_train_data, ch_test_data)  = preprocess_datasets(ch_config, params.cols_to_remove, params.model_type ) 
+        (ch_preproc_config, ch_train_config, ch_train_data, ch_test_data)  = preprocess_datasets(ch_config, params.cols_to_remove, params.model_type, datetime_string) 
         ch_train_config.view()
        // PRINT_PATH()
     } // else load previously generated train, test sets
     else {
-        ch_train_config = Channel.fromPath("${params.output_dir}/configs/preprocess/*.yml",  checkIfExists: true )
+        ch_train_config = Channel.fromPath("${params.output_dir}/configs/models/*.yml",  checkIfExists: true )
         ch_train_data = Channel.fromPath("${params.output_dir}/Modelling/data/preprocessed/${params.preproc_data_folder}/data/train_data.csv")
         ch_test_data = Channel.fromPath("${params.output_dir}/Modelling/data/preprocessed/${params.preproc_data_folder}/data/test_data.csv")
         print(ch_train_config)
@@ -107,33 +118,33 @@ workflow {
 
     // perform training if specified
     if ( params.train == true ) {
-        (ch_train_model_json, ch_train_model_config) = train_data(ch_train_config)
-        ch_train_model_config.view()
+        (ch_train_model_json, ch_model_to_infer_config) = train_data(ch_train_config, datetime_string)
+        ch_model_to_infer_config.view()
         }
     else{
-        ch_train_model_config = Channel.fromPath("${params.output_dir}/configs/models/*.yml",  checkIfExists: true )
-        ch_train_model_config.view()
+        ch_model_to_infer_config = Channel.fromPath("${params.output_dir}/Modelling/output/models/${params.exp_name}/config/*.yml",  checkIfExists: true )
+        ch_model_to_infer_config.view()
         }
     
-    train_conf = ch_train_model_config.collect()
+    infer_conf = ch_model_to_infer_config.collect()
     test_data = ch_test_data.collect()
-    train_conf.view()
+    infer_conf.view()
 
     // perform prediction and inference if specified
-    if ( params.predict == true && params.exp_name == "") {
+    if ( params.infer_from_data == true && params.exp_name == "") {
         output_name = Channel.of("${params.model_type}_prediction_inference.csv")
-        (ch_config_for_analysis, ch_infer_csv) = infer_from_data( ch_train_model_config.view() , params.exp_name , ch_test_data.view() , output_name)
+        (ch_config_for_analysis, ch_infer_csv) = infer_from_data( ch_model_to_infer_config.view() , params.exp_name , ch_test_data.view() , output_name, datetime_string)
         ch_config_for_analysis.view()
     }
     else{
-        ch_config_for_analysis = Channel.fromPath("${params.output_dir}/Modelling/output/models/${params.exp_name}/config/*.yml",  checkIfExists: true )
+        ch_config_for_analysis = Channel.fromPath("${params.output_dir}/configs/analysis/xgboost_analysis_config.yml",  checkIfExists: true )
         ch_infer_csv = Channel.fromPath("${params.output_dir}/Modelling/output/models/${params.exp_name}/inference/*.csv",  checkIfExists: true )
         ch_config_for_analysis.view()
     }
     
     // perform analysis if specified
     if ( params.analyze == true && params.exp_name == "") {
-        ch_analysis_out  = analyze_dataset(ch_config_for_analysis , ch_train_model_config.view() , ch_infer_csv.view())
+        ch_analysis_out  = analyze_dataset(ch_config_for_analysis , ch_model_to_infer_config.view() , ch_infer_csv.view(), datetime_string)
         ch_analysis_out.view()
     }
     else if ( params.analyze == true && params.exp_name != "") {
