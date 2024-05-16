@@ -1,11 +1,6 @@
 #!/usr/bin/env python3
 
 from typing import Tuple
-from sklearn.compose import ColumnTransformer
-
-from sklearn.preprocessing import OneHotEncoder
-from sklearn.impute import SimpleImputer
-from sklearn.pipeline import Pipeline
 
 import pandas as pd
 
@@ -40,12 +35,21 @@ def nn_process(config: dict, df: pd.DataFrame, *args) -> Tuple[pd.DataFrame, pd.
         df.loc[df['PFS_STATUS'].str.startswith(k, na=False), 'PFS_STATUS'] = v
     print(set(df['PFS_STATUS']))
 
-    # Drop nan values.
-    #print("\n---Summarising data before removing nulls.---")
+    #Instead of Drop nan values, replace 
+    def fill_na(data):
+        for col in data.columns:
+            if data[col].isna().any():
+                if data[col].dtype == "O":  # Object type (categorical)
+                    data[col] = data[col].fillna('Missing')
+                else:  # Numeric type
+                    data[col] = data[col].fillna(-1)
+        return data
+    
+    # Fill NaN values
+    df = fill_na(df)
+
     df.info(memory_usage=False) # Prints info.
-    #df = df.dropna(how="any", axis=0)
-    # creating instance of one-hot-encoder
-    # get categorical data
+
     catCols = [col for col in df.columns if df[col].dtype=="O" and ('SAMPLE_ID' not in col and 'PATIENT_ID' not in col and 'PFS_STATUS' not in col)]
 
     # Create dummy variables (one hot encoding).
