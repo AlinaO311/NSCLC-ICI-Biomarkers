@@ -16,26 +16,27 @@ process fetch_dataset {
     val dataset_names 
     val datatype
     val mutations_data
+    val datetime_string
 
     script:
     if (params.datatype == "categorical" & params.dataset_names == "") 
       """
-      fetch_dataset.py --datatype "categorical" --mutations ${mutations_data} --outdir ${params.output_dir} 
+      fetch_dataset.py --datatype "categorical" --mutations ${mutations_data} --outdir ${params.output_dir} --datetime ${datetime_string}
       """
     
     else if (params.datatype == "numerical" &  params.dataset_names == "" )
       """
-      fetch_dataset.py --datatype "numerical" --mutations ${mutations_data} --outdir ${params.output_dir}
+      fetch_dataset.py --datatype "numerical" --mutations ${mutations_data} --outdir ${params.output_dir} --datetime ${datetime_string}
       """
     
     else if (params.datatype == "categorical" & params.dataset_names != "")
       """
-      fetch_dataset.py --dataset_names ${params.dataset_names} --datatype "categorical" --mutations ${mutations_data} --outdir ${params.output_dir}
+      fetch_dataset.py --dataset_names ${params.dataset_names} --datatype "categorical" --mutations ${mutations_data} --outdir ${params.output_dir} --datetime ${datetime_string}
       """
     
     else if (params.datatype == "numerical" & params.dataset_names != "")
       """
-      fetch_dataset.py --dataset_names ${params.dataset_names} --datatype "numerical" --mutations ${mutations_data} --outdir ${params.output_dir}
+      fetch_dataset.py --dataset_names ${params.dataset_names} --datatype "numerical" --mutations ${mutations_data} --outdir ${params.output_dir} --datetime ${datetime_string}
       """
     
     else
