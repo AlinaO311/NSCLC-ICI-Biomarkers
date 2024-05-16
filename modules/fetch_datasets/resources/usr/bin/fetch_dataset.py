@@ -10,9 +10,8 @@ import re
 import pandas as pd
 import glob
 import difflib
-from datetime import datetime
+#from datetime import datetime
 from itertools import chain
-
 
 path_list = []
 patientSets = {}
@@ -138,15 +137,18 @@ class FetchData(object):
         # Count the occurrence of each Mut/consequence for each Sample_ID
         mutDF = pd.crosstab( all_mut_data['TUMOR_SAMPLE_BARCODE'], all_mut_data['MUT_HGVSP'], dropna=False).astype(int)
         # if count is greater than 2 set to 1, else 0
-        mutDF.iloc[:,1:] = mutDF.iloc[:,1:].applymap(lambda x: 1 if x >= 2 else 0)
+        mutDF.iloc[:,1:] = mutDF.iloc[:,1:].applymap(lambda x: x if x >= 1 else 0)
+        mutDF = mutDF.loc[:, pd.notnull(mutDF.columns)]
         length=len(names)
         for name in range(length):
             # sum across rows where col matches any of mutations in list muts
-            mutDF[names[name]] = mutDF.filter(items=muts[name]).sum(1)
+            mutDF[names[name]] = mutDF.loc[:, mutDF.columns.str.startswith(tuple(muts[name]))].sum(1)
         mutDF['TUMOR_SAMPLE_BARCODE'] = mutDF.index
         mutDF.index.name = None
         mutationMerged_dict = all_sample_data.merge(mutDF.rename(columns={'TUMOR_SAMPLE_BARCODE': 'SAMPLE_ID'}), 'left')
-        getCols = [cols for cols in mutationMerged_dict for col in list(set(chain(*muts)))+names if col == cols]
+        unique_values = list(set(chain(*muts)))+names  # Get unique values from flattened list
+        getCols = [cols for cols in mutationMerged_dict if any(str(cols).startswith(val) for val in unique_values)]
+        #[cols for cols in mutationMerged_dict for col in list(set(chain(*muts)))+names if col == cols]
         mutationMerged_dict = mutationMerged_dict.loc[:,['PATIENT_ID','SAMPLE_ID']].join(mutationMerged_dict.loc[:,getCols].fillna(0).astype(int))
         # Combine all data:
         patient_sample_data = pd.merge(all_clinical_data, mutationMerged_dict.merge(all_mut_data.rename(columns={'TUMOR_SAMPLE_BARCODE': 'SAMPLE_ID'}), 'left') , on=['PATIENT_ID','STUDY_NAME'], how='left')
@@ -173,16 +175,20 @@ if __name__ == '__main__':
     # user provided seed
     parser.add_argument('--random_seed', help='random seed, default: 42', required=False, default=42)
     parser.add_argument('--outdir', help='output directory, default: results', required=False)
-
+    parser.add_argument('--datetime', required=True)
     args = parser.parse_args()
     datasets = []
+
+    # get stored initial datetime from nf created file
+    time_val =  args.datetime
+    mydatetime = time_val.strip()
     for study in args.dataset_names:
         print(study)
         datasets.append(study)
     inputdata = Harmonize(datasets, args.mutations)
     print('Features from Data', inputdata.columns.tolist())
 
-    mydatetime = datetime.now().strftime("%Y%m%d-%H%M")
+#    mydatetime = datetime.now().strftime("%Y%m%d-%H%M")
     # save data
     inputdata.to_csv('data_'+mydatetime+'.tsv' , sep='\t',  index=False)
     yaml = ruamel.yaml.YAML()
