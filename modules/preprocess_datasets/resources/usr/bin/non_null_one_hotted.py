@@ -47,10 +47,10 @@ def nn_process(config: dict, df: pd.DataFrame, *args) -> Tuple[pd.DataFrame, pd.
     
     # Fill NaN values
     df = fill_na(df)
-
+    df = df.drop(columns=['SAMPLE_ID', 'PATIENT_ID'])
     df.info(memory_usage=False) # Prints info.
 
-    catCols = [col for col in df.columns if df[col].dtype=="O" and ('SAMPLE_ID' not in col and 'PATIENT_ID' not in col and 'PFS_STATUS' not in col)]
+    catCols = [col for col in df.columns if df[col].dtype=="O" and 'PFS_STATUS' not in col]
 
     # Create dummy variables (one hot encoding).
     print("\n\n---Creating dummy (one hot encoded) variables.---")
