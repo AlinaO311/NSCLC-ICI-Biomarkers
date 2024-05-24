@@ -127,7 +127,7 @@ class FetchData(object):
         targets = [word for word in mut_list if '=' in word]
         for t in targets:
             ls.append(t.split('=', 1)[0])
-        names = [re.sub('\w+[\n]+', '', x) for x in ls]
+        names = [re.sub('.*[\n]+', '', x) for x in ls]
         # for mut in mut_list split into sep list by newlines then join into separate lists, rm empty lists
         m_lst = [ ele for ele in [l.split(',') for l in ','.join(mut_list).split('\n')] if ele != ['']]
         # replace string before = in each element within each list and strip whitespace
@@ -152,7 +152,7 @@ class FetchData(object):
         mutationMerged_dict = mutationMerged_dict.loc[:,['PATIENT_ID','SAMPLE_ID']].join(mutationMerged_dict.loc[:,getCols].fillna(0).astype(int))
         # Combine all data:
         patient_sample_data = pd.merge(all_clinical_data, mutationMerged_dict.merge(all_mut_data.rename(columns={'TUMOR_SAMPLE_BARCODE': 'SAMPLE_ID'}), 'left') , on=['PATIENT_ID','STUDY_NAME'], how='left')
-        patient_sample_data = patient_sample_data.drop('HUGO_SYMBOL', axis=1)
+        patient_sample_data = patient_sample_data.drop(['HUGO_SYMBOL','HGVSP','MUT_HGVSP'], axis=1)
         return patient_sample_data
 
 def Harmonize(self, *args):
