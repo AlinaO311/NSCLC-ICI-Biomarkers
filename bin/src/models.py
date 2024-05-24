@@ -5,18 +5,33 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any, Optional
 
+import warnings
 import os
 import eli5
 import numpy as np
 import pandas as pd
 import xgboost as xgb
+import psutil
 from sklearn.model_selection import KFold, cross_val_score
 from tensorflow import keras
 from dask.distributed import Client
-
-from dask.dataframe import from_pandas
+from dask_jobqueue import LSFCluster
+import dask.dataframe as dd
 import dask_ml.model_selection as dms
 
+
+# Determine available resources
+physical_cores = psutil.cpu_count(logical=False)
+logical_cores = psutil.cpu_count(logical=True)
+total_memory = psutil.virtual_memory().total
+total_memory_gb = total_memory / (1024 ** 3)
+
+# Set parameters dynamically
+cores_per_job = min(physical_cores // 4, 16)  # Example: Use up to 16 cores per job
+memory_per_job_gb = total_memory_gb / 4
+memory_per_job = f"{memory_per_job_gb:.2f}GB"
+min_workers = 1
+max_workers = min(logical_cores // cores_per_job, 64)  # Example: Use up to 64 workers
 
 XGBOOST_MODEL_NAME = "xgboost"
 KERAS_MODEL_NAME = "keras_feed_forward"
@@ -100,19 +115,34 @@ class XGBoost(BaseModel):
             y_train -- The corresponding ground truth.
         """
         ## create dask Data Matrix with Client 
-        client = Client(n_workers=10, threads_per_worker=2, memory_limit='5GB')
-        print('starting client ', client)
-        total_memory = x_train.memory_usage(index=True).sum()
-        print('here is x_train size', total_memory)
+        log_path = os.getcwd() + '/logs'
+
+        with warnings.catch_warnings(record=True):
+            cluster = LSFCluster(
+                        queue='test.q',
+                        walltime='02:00',   # 2 hours
+                        cores=cores_per_job,
+                        memory=memory_per_job,
+                        lsf_units="k",
+                        log_directory=log_path,
+                        local_directory="$TMPDIR",
+                    )
+        ## adapt number of workers dynamically
+        cluster.adapt(minimum=min_workers, maximum=max_workers)
+        # Connect the client to the LSFCluster
+        client = Client(cluster)
         print('starting client ', client)
 
-        # Desired max size per partition (1GB)
-        max_partition_size = 1073741824
+        total_memory = x_train.memory_usage(index=True).sum()
+        print('here is x_train size', total_memory)
+        max_partition_size = 500 * 1024 * 1024 ## 500MB
         parts_split = (int(total_memory) + int(max_partition_size) - 1) // (max_partition_size)  # Ceiling division
         print('number of partitions', parts_split)
-        ddf = from_pandas(x_train, npartitions=parts_split)
+        ddf = dd.from_pandas(x_train, npartitions=parts_split)
+        ddf = ddf.repartition(partition_size='500MB')
         print('ddf partitions ', ddf.npartitions)
-        y_ddf = from_pandas(y_train, npartitions=parts_split)
+        y_ddf = dd.from_pandas(y_train, npartitions=parts_split)
+        y_ddf = y_ddf.repartition(partition_size='500MB')
 
         dtrain = xgb.dask.DaskDMatrix(client, ddf, y_ddf)
 
