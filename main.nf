@@ -34,7 +34,7 @@ log.info """\
 
         train           : ${params.train}
 
-        infer_from_data : ${params.predict}
+        infer_from_data : ${params.infer_from_data}
         predict_models  : ${params.predict_models}
         predict_train   : ${params.predict_train}
         predict_test    : ${params.predict_test}
