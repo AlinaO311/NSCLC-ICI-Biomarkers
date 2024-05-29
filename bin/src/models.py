@@ -5,9 +5,9 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any, Optional
 
-import warnings
 import os
 import eli5
+import warnings
 import numpy as np
 import pandas as pd
 import xgboost as xgb
@@ -15,23 +15,9 @@ import psutil
 from sklearn.model_selection import KFold, cross_val_score
 from tensorflow import keras
 from dask.distributed import Client
-from dask_jobqueue import LSFCluster
 import dask.dataframe as dd
 import dask_ml.model_selection as dms
 
-
-# Determine available resources
-physical_cores = psutil.cpu_count(logical=False)
-logical_cores = psutil.cpu_count(logical=True)
-total_memory = psutil.virtual_memory().total
-total_memory_gb = total_memory / (1024 ** 3)
-
-# Set parameters dynamically
-cores_per_job = min(physical_cores // 4, 16)  # Example: Use up to 16 cores per job
-memory_per_job_gb = total_memory_gb / 4
-memory_per_job = f"{memory_per_job_gb:.2f}GB"
-min_workers = 1
-max_workers = min(logical_cores // cores_per_job, 64)  # Example: Use up to 64 workers
 
 XGBOOST_MODEL_NAME = "xgboost"
 KERAS_MODEL_NAME = "keras_feed_forward"
@@ -106,7 +92,7 @@ class XGBoost(BaseModel):
             )
 
         super().__init__()
-
+    
     def train(self, x_train: pd.DataFrame, y_train: pd.DataFrame) -> None:
         """Trains the model on the given training data.
 
@@ -114,71 +100,14 @@ class XGBoost(BaseModel):
             x_train -- The training data set.
             y_train -- The corresponding ground truth.
         """
-        ## create dask Data Matrix with Client 
-        log_path = os.getcwd() + '/logs'
+        self.model.fit(x_train, y_train)
 
-        with warnings.catch_warnings(record=True):
-            cluster = LSFCluster(
-                        queue='test.q',
-                        walltime='02:00',   # 2 hours
-                        cores=cores_per_job,
-                        memory=memory_per_job,
-                        lsf_units="k",
-                        log_directory=log_path,
-                        local_directory="$TMPDIR",
-                    )
-        ## adapt number of workers dynamically
-        cluster.adapt(minimum=min_workers, maximum=max_workers)
-        # Connect the client to the LSFCluster
-        client = Client(cluster)
-        print('starting client ', client)
+        scores = cross_val_score(self.model, x_train, y_train, cv=5)
+        print("Mean cross-validation score: %.2f" % scores.mean())
 
-        total_memory = x_train.memory_usage(index=True).sum()
-        print('here is x_train size', total_memory)
-        max_partition_size = 500 * 1024 * 1024 ## 500MB
-        parts_split = (int(total_memory) + int(max_partition_size) - 1) // (max_partition_size)  # Ceiling division
-        print('number of partitions', parts_split)
-        ddf = dd.from_pandas(x_train, npartitions=parts_split)
-        ddf = ddf.repartition(partition_size='500MB')
-        print('ddf partitions ', ddf.npartitions)
-        y_ddf = dd.from_pandas(y_train, npartitions=parts_split)
-        y_ddf = y_ddf.repartition(partition_size='500MB')
-
-        dtrain = xgb.dask.DaskDMatrix(client, ddf, y_ddf)
-
-        # Perform K-fold CV using xgb.dask.cv with custom folds
-        kf = dms.model_selection.KFold(n_splits=10, shuffle=True, random_state=self.config["random_seed"])
-
-        # Placeholder for cross-validation scores
-        cv_scores = []
-
-        for train_index, test_index in kf.split(ddf):
-            # Splitting the data
-            X_train, X_test = ddf.iloc[train_index], ddf.iloc[test_index]
-            y_train, y_test = y_ddf.iloc[train_index], y_ddf.iloc[test_index]
-
-            # Convert to DaskDMatrix
-            dtrain = xgb.dask.DaskDMatrix(client, X_train, y_train)
-            dtest = xgb.dask.DaskDMatrix(client, X_test, y_test)
-
-            # Train model
-            d_model = xgb.dask.train(client,
-                                   params=self.config["args"],
-                                   dtrain=dtrain,
-                                   num_boost_round=10,  # Adjust based on CV results
-                                   **self.config["args"])
-            
-            print("K fold model trained: " , d_model)
-
-            # Evaluate model
-            predictions = xgb.dask.predict(client, d_model, dtest)
-            # Assuming a regression problem, replace with appropriate evaluation function
-            score = ((y_test - predictions) ** 2).mean().compute()
-            cv_scores.append(score)
-        
-        # Calculate average score across all folds
-        average_score = sum(cv_scores) / len(cv_scores)
-        print(f"Average Score: {average_score}") 
+        kfold = KFold(n_splits=10, shuffle=True)
+        kf_cv_scores = cross_val_score(self.model, x_train, y_train, cv=kfold)
+        print("K-fold CV average score: %.2f" % kf_cv_scores.mean())
 
 
     def explain_weights(self) -> str:
@@ -199,19 +128,8 @@ class XGBoost(BaseModel):
         Returns:
             A Pandas dataframe with the predicted values.
         """
-        ddf = from_pandas(x_test, npartitions=3)
-        client = Client()
-        dtest = xgb.dask.DaskDMatrix(client, ddf)
-        print('Here is model used for prediction: ', self.model)
-        predictions_dask_array = xgb.dask.predict(client, self.model, dtest)
+        return self.model.predict(x_test)
 
-        # Compute the Dask Array to get the actual predictions as a NumPy array
-        predictions_numpy_array = predictions_dask_array.compute()
-
-        # Convert the NumPy array to a Pandas DataFrame
-        predictions_df = pd.DataFrame(predictions_numpy_array, columns=['Predictions'])
-
-        return predictions_df
 
     def save_model(self, directory: Path) -> None:
         """Save the model at the specified location.
@@ -381,4 +299,5 @@ class KerasFeedForward(BaseModel):
             The loaded Keras feed forward model.
         """
         return keras.models.load_model(model_path)
+
 
