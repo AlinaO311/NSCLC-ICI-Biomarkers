@@ -10,6 +10,7 @@ from ruamel.yaml.scalarstring import SingleQuotedScalarString, DoubleQuotedScala
 from pathlib import Path
 from utils import read_config
 
+set_datetime = os.getenv('DATE_VALUE')
 cwd=os.getcwd().split('work', 1)[0]
 
 
@@ -23,7 +24,7 @@ if __name__ == "__main__":
         "--config_path",
         required=True,
         type=Path,
-        default=Path(os.path.join(cwd, "${params.output_dir}", "configs/model/*.yml")),
+        default=Path(os.path.join(cwd, "${params.output_dir}", "configs/models/*.yml")),
         help="Path to preprocess config file.",
     )
     parser.add_argument('--output_file', help='name of output file',required=False)
@@ -31,6 +32,9 @@ if __name__ == "__main__":
     args = parser.parse_args()
     config_to_load = read_config(args.config_path)
     train_name = config_to_load['training_name']
+    time_val = set_datetime.strip()
+
+    latest_file = os.path.join(cwd, "${params.output_dir}" ,'Modelling','data','predicted', train_name+'_prediction_inference.csv')
 
     yaml = ruamel.yaml.YAML()
 
@@ -68,22 +72,23 @@ if __name__ == "__main__":
         # List of scatterplots to plot. Any nan values will be dropped.
             scatter_plot: [
                 {
-                output_name: "age_vs_smoking_history__scatter_plot",
+                output_name: "age_vs_smoking_history_scatter_plot",
                 x_column: "AGE",
                 y_column: "SMOKING_HISTORY",
                 color_column: "predicted"
                 },
             {
-            output_name: "MSI_vs_TMB_norm_log2__scatter_plot",
+            output_name: "MSI_vs_TMB_norm_log2_scatter_plot",
             x_column: "MSI",
             y_column: "TMB_norm_log2",
             color_column: "PFS_STATUS"
             },
             {
-            output_name: "Diagnosis_Age_vs_TMB_norm_log2__scatter_plot",
+            output_name: "Diagnosis_Age_vs_TMB_norm_log2_scatter_plot",
             x_column: "AGE",
             y_column: "TMB_norm_log2",
-            color_column: "PFS_STATUS"
+            color_column: "PFS_STATUS",
+            prediction_data_path:
             }
         ]
         """
@@ -107,6 +112,7 @@ if __name__ == "__main__":
                 for k in val:
                     val[k] = format_lists_in_block_style_if_colon_found(val[k])
             return val
+        yaml_dump['prediction_data_path'] = latest_file
         yaml_dump = format_lists_in_block_style_if_colon_found(yaml_dump)
         with open("xgboost_analysis_config.yml", 'w') as f:
              yaml.dump(yaml_dump, f)
