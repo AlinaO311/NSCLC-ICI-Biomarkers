@@ -11,6 +11,7 @@ from datetime import datetime
 from pathlib import Path
 from utils import read_config
 
+set_datetime = os.getenv('DATE_VALUE')
 cwd=os.getcwd().split('work', 1)[0]
 
 if __name__ == "__main__":
@@ -32,9 +33,9 @@ if __name__ == "__main__":
     args = parser.parse_args()
     config_to_load = read_config(args.config_path)
     output_name = config_to_load['output_name']
+    time_val = set_datetime.strip()
 
-    start_time = datetime.now().strftime("%Y%m%d-%H%M")
-    latest_file = os.path.join(cwd, args.outdir,'Modelling','data','preprocessed',output_name+'_'+start_time,'data','train_data.csv')
+    latest_file = os.path.join(cwd, args.outdir,'Modelling','data','preprocessed',output_name+'_'+time_val,'data','train_data.csv')
 
     yaml = ruamel.yaml.YAML()
 
