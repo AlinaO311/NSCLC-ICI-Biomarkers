@@ -72,6 +72,28 @@ process GetDateTimeAsString {
     """
 }
 
+process findMostRecentFile {
+    input:
+    val dirPath
+
+    output:
+    stdout
+
+    script:
+    """
+    ls -t $PWD/${dirPath} | tail -1
+    """
+}
+
+
+params.fetch_dataset = params.fetch_dataset ?: true
+params.visualize = params.visualize ?: false
+params.preprocess = params.preprocess ?: true
+params.train = params.train ?: true
+params.infer_from_data = params.infer_from_data ?: true
+params.analyze = params.analyze ?: true
+
+
 workflow {
     datetime_string = GetDateTimeAsString()
      
@@ -94,14 +116,19 @@ workflow {
     else {
         ch_preproc_config = Channel.fromPath("${params.output_dir}/configs/preprocess/*.yml")
     }
-
+   
+    // visualize missing data 
+    if (params.visualize) {
+        visualize_dataset(ch_data)
+    } else {
+        print("Skipping visualize process.")
+    }
     
     // preprocess data sets
     if ( params.preprocess == true ) {
         // if preprocess of dataset needed for categorical processing, creating train/test sets
         (ch_preproc_config, ch_train_config, ch_train_data, ch_test_data)  = preprocess_datasets(ch_preproc_config, params.cols_to_remove, params.model_type, datetime_string) 
         ch_train_config.view()
-       // PRINT_PATH()
     } // else load previously generated train, test sets
     else {
         ch_train_config = Channel.fromPath("${params.output_dir}/configs/models/*.yml",  checkIfExists: true )
@@ -110,51 +137,61 @@ workflow {
         print(ch_train_config)
     }
     
-    if ( params.train == true ) {
+    // train data   
+    if (params.train == true) {
         (ch_train_model_json, ch_model_to_infer_config) = train_data(ch_train_config, datetime_string)
         ch_model_to_infer_config.view()
+    } else {
+        if (!params.exp_name) {
+            base = "${params.output_dir}/Modelling/output/models"
+            expName = findMostRecentFile(base)
+            ch_model_to_infer_config = expName.map { mostRecentFile ->
+                 def fullPath_yml = "${base}/${mostRecentFile.trim()}/config/*.yml"
+                 return fullPath_yml
+             }           
+            ch_train_model_json =  expName.map { mostRecentFile ->
+                 def fullPath_json = "${base}/${mostRecentFile.trim()}/model/*.json"
+                 return fullPath_json
+             }        
+            ch_model_to_infer_config.view() 
+        } else {
+            ch_model_to_infer_config = Channel.fromPath("${params.output_dir}/Modelling/output/models/${params.exp_name}/config/*.yml", checkIfExists: true)
+            ch_train_model_json = Channel.fromPath("${params.output_dir}/Modelling/output/models/${params.exp_name}/model/*.json", checkIfExists: true)
+            ch_model_to_infer_config.view()
         }
-    else{
-        ch_model_to_infer_config = Channel.fromPath("${params.output_dir}/Modelling/output/models/${params.exp_name}/config/*.yml",  checkIfExists: true )
-        ch_model_to_infer_config.view()
-        }
+    }
     
-    // First, check if infer_from_data is true
+    //infer from data or predict data 
+    // 1 ) do we perform inference, yes = true, no = false
     if (params.infer_from_data == true) {
-        if (params.exp_name == "") {
-            output_name = Channel.of("${params.model_type}_prediction_inference.csv")
-            (ch_config_for_analysis, ch_infer_csv) = infer_from_data(ch_model_to_infer_config.view(), params.exp_name, ch_test_data.view(), output_name, datetime_string)
-            ch_config_for_analysis.view()
-        } 
-        else {
-            ch_config_for_analysis = Channel.fromPath("${params.output_dir}/configs/analysis/xgboost_analysis_config.yml", checkIfExists: true)
-            ch_infer_csv = Channel.fromPath("${params.output_dir}/Modelling/output/models/${params.exp_name}/inference/*.csv", checkIfExists: true)
-            ch_config_for_analysis.view()
+        // 2) if yes, is experiment name empty or not given
+        if (!params.exp_name) {
+            params.exp_name = ""; // Set default value if not provided
         }
-
-        ch_config_for_analysis.ifEmpty {
-            print("Analysis config is empty. Exiting")
-        }.set { ch_config_for_analysis_non_empty }
-
-        // Now, check if analyze_dataset is true
-        if (params.analyze == true) {
-            if (params.exp_name == "") {
-                ch_analysis_out = analyze_dataset(ch_config_for_analysis_non_empty, ch_model_to_infer_config.view(), ch_infer_csv.view(), datetime_string)
-                ch_analysis_out.view()
-            } 
-            else {
-                ch_analysis_out = analyze_dataset(ch_config_for_analysis_non_empty, params.exp_name, ch_test_data.view())
-                ch_analysis_out.view()
-            }
-        } 
-        else {
-            print("Analysis not performed")
-        }
-    } 
-    else {
+        output_name = Channel.of("${params.model_type}_prediction_inference.csv")
+        (ch_config_for_analysis, ch_infer_csv) = infer_from_data(ch_model_to_infer_config.view(), params.exp_name, ch_test_data.view(), output_name, datetime_string)
+        ch_config_for_analysis.view()
+    } else {
+        ch_config_for_analysis = Channel.fromPath("${params.output_dir}/configs/analysis/xgboost_analysis_config.yml", checkIfExists: true)
+        ch_infer_csv = Channel.fromPath("${params.output_dir}/Modelling/data/predicted/*.csv", checkIfExists: true)
+        ch_config_for_analysis.view()
         print("Inference from data not performed")
     }
 
+    if (params.analyze == true) {
+        if (!params.exp_name) {
+            ch_exp_name = expName.map { mostRecentFile ->
+                def experiment_name = mostRecentFile.trim()
+                return experiment_name
+            }
+            ch_analysis_out = analyze_dataset(ch_config_for_analysis, ch_exp_name.view(), ch_infer_csv.view(), datetime_string)
+            ch_analysis_out.view()
+        } else {
+            ch_analysis_out = analyze_dataset(ch_config_for_analysis, params.exp_name, ch_infer_csv.view(), datetime_string)
+            ch_analysis_out.view() }
+    } else {
+        print("Analysis not performed")
+    }
 }
 
 /* 
@@ -163,4 +200,3 @@ workflow {
 workflow.onComplete {
 	log.info ( workflow.success ? '\nDone!' : '\nOops .. something went wrong' )
 }
-
