@@ -8,6 +8,8 @@ from ruamel.yaml import YAML
 
 import git
 
+set_datetime = os.getenv('DATE_VALUE')
+
 def read_config(config_path: Path) -> dict:
     """Extract a configuration dict from a .yaml file.
 
@@ -18,7 +20,7 @@ def read_config(config_path: Path) -> dict:
         A dict containing the configuration.
     """
     with open(config_path) as file:
-        yaml=YAML(typ='safe')
+        yaml=YAML(typ='safe', pure=True)
         config = yaml.load(file)
     return config
 
@@ -64,7 +66,8 @@ def copy_config(config: dict, path_to_folder: Path, name) -> None:
 
 def get_current_datetime() -> str:
     """Returns the current datetime as a string."""
-    return datetime.now().strftime("%Y%m%d-%H%M")
+    current_datetime = set_datetime.strip()
+    return current_datetime
 
 
 def create_directory(dir_path: Path) -> None:
