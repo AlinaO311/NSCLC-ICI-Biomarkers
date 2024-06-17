@@ -27,13 +27,14 @@ def nn_process(config: dict, df: pd.DataFrame, *args) -> Tuple[pd.DataFrame, pd.
         df = df.drop(columns=args.remove_cols, axis=1, inplace=False)
     else:
         pass
+
     df = df[df['PFS_STATUS'].notna()]
+
     map = {
     '0': 0 ,
     '1': 1}
     for k, v in map.items():
         df.loc[df['PFS_STATUS'].str.startswith(k, na=False), 'PFS_STATUS'] = v
-    print(set(df['PFS_STATUS']))
 
     #Instead of Drop nan values, replace 
     def fill_na(data):
@@ -47,7 +48,7 @@ def nn_process(config: dict, df: pd.DataFrame, *args) -> Tuple[pd.DataFrame, pd.
     
     # Fill NaN values
     df = fill_na(df)
-    df = df.drop(columns=['SAMPLE_ID', 'PATIENT_ID'])
+    df = df.drop(columns=['SAMPLE_ID', 'PATIENT_ID','STUDY_NAME'])
     df.info(memory_usage=False) # Prints info.
 
     catCols = [col for col in df.columns if df[col].dtype=="O" and 'PFS_STATUS' not in col]
