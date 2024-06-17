@@ -28,13 +28,14 @@ if __name__ == "__main__":
         help="Path to preprocess config file.",
     )
     parser.add_argument('--output_file', help='name of output file',required=False)
+    parser.add_argument('--dir', help='name of output directory',required=False)
 
     args = parser.parse_args()
     config_to_load = read_config(args.config_path)
     train_name = config_to_load['training_name']
     time_val = set_datetime.strip()
 
-    latest_file = os.path.join(cwd, "${params.output_dir}" ,'Modelling','data','predicted', train_name+'_prediction_inference.csv')
+    latest_file = os.path.join(cwd,  args.dir ,'Modelling','data','predicted', train_name+'_prediction_inference.csv')
 
     yaml = ruamel.yaml.YAML()
 
@@ -44,9 +45,9 @@ if __name__ == "__main__":
             confusion_matrix: [
                 {
                 output_name: "confusion_matrix",
-                ground_truth_col: "PFS_STATUS",
-                prediction_col: "predicted" 
-                }      
+                gt_column: "PFS_STATUS",
+                prediction_col: "predicted"
+                }
             ]
             # List of histograms to plot. Any nan values will be dropped.
             histogram: [
@@ -79,7 +80,7 @@ if __name__ == "__main__":
                 },
             {
             output_name: "MSI_vs_TMB_norm_log2_scatter_plot",
-            x_column: "MSI",
+            x_column: "PDL1_EXP",
             y_column: "TMB_norm_log2",
             color_column: "PFS_STATUS"
             },
@@ -95,6 +96,7 @@ if __name__ == "__main__":
         yaml.preserve_quotes = True
         yaml.explicit_start = True
         yaml_dump = yaml.load(yml_dict)
+        yaml_dump['scatter_plot'][-1]['prediction_data_path'] = latest_file  # Ensure correct placement
         def format_lists_in_block_style_if_colon_found(val):
             """Convert all lists with a ':' in them to block style."""
             if isinstance(val, list):
@@ -112,7 +114,6 @@ if __name__ == "__main__":
                 for k in val:
                     val[k] = format_lists_in_block_style_if_colon_found(val[k])
             return val
-        yaml_dump['prediction_data_path'] = latest_file
         yaml_dump = format_lists_in_block_style_if_colon_found(yaml_dump)
         with open("xgboost_analysis_config.yml", 'w') as f:
              yaml.dump(yaml_dump, f)
