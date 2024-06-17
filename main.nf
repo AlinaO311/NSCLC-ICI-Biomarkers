@@ -81,7 +81,7 @@ process findMostRecentFile {
 
     script:
     """
-    ls -t $PWD/${dirPath} | tail -1
+    ls -t ${dirPath} | tail -1
     """
 }
 
@@ -134,64 +134,91 @@ workflow {
         ch_train_config = Channel.fromPath("${params.output_dir}/configs/models/*.yml",  checkIfExists: true )
         ch_train_data = Channel.fromPath("${params.output_dir}/Modelling/data/preprocessed/${params.preproc_data}/data/train_data.csv")
         ch_test_data = Channel.fromPath("${params.output_dir}/Modelling/data/preprocessed/${params.preproc_data}/data/test_data.csv")
-        print(ch_train_config)
+        println "here is train config"
+        ch_train_config.view()
     }
-    
-    // train data   
+
+    // train data
     if (params.train == true) {
         (ch_train_model_json, ch_model_to_infer_config) = train_data(ch_train_config, datetime_string)
         ch_model_to_infer_config.view()
     } else {
         if (!params.exp_name) {
-            base = "${params.output_dir}/Modelling/output/models"
+            base = "$PWD/${params.output_dir}/Modelling/output/models"
             expName = findMostRecentFile(base)
             ch_model_to_infer_config = expName.map { mostRecentFile ->
-                 def fullPath_yml = "${base}/${mostRecentFile.trim()}/config/*.yml"
+                 def fullPath_yml = "${base}/${mostRecentFile.trim()}/config/model_config.yml"
                  return fullPath_yml
-             }           
+             }
             ch_train_model_json =  expName.map { mostRecentFile ->
-                 def fullPath_json = "${base}/${mostRecentFile.trim()}/model/*.json"
+                 def fullPath_json = "${base}/${mostRecentFile.trim()}/model/model.json"
                  return fullPath_json
-             }        
-            ch_model_to_infer_config.view() 
+             }
+            println "here specify train as false and here is model for infer"
+            ch_model_to_infer_config.view()
         } else {
-            ch_model_to_infer_config = Channel.fromPath("${params.output_dir}/Modelling/output/models/${params.exp_name}/config/*.yml", checkIfExists: true)
-            ch_train_model_json = Channel.fromPath("${params.output_dir}/Modelling/output/models/${params.exp_name}/model/*.json", checkIfExists: true)
+            ch_model_to_infer_config = Channel.fromPath("$PWD/{params.output_dir}/Modelling/output/models/${params.exp_name}/config/model_config.yml", checkIfExists: true)
+            ch_train_model_json = Channel.fromPath("$PWD/${params.output_dir}/Modelling/output/models/${params.exp_name}/model/model.json", checkIfExists: true)
             ch_model_to_infer_config.view()
         }
     }
-    
-    //infer from data or predict data 
+
+  //  train_conf = ch_train_model_config.collect()
+  //  test_data = ch_test_data.collect()
+  //  train_conf.view()
+
+    // predict data 
     // 1 ) do we perform inference, yes = true, no = false
     if (params.infer_from_data == true) {
         // 2) if yes, is experiment name empty or not given
         if (!params.exp_name) {
             params.exp_name = ""; // Set default value if not provided
         }
-        output_name = Channel.of("${params.model_type}_prediction_inference.csv")
-        (ch_config_for_analysis, ch_infer_csv) = infer_from_data(ch_model_to_infer_config.view(), params.exp_name, ch_test_data.view(), output_name, datetime_string)
+        output_name = Channel.of("${params.model_type}_model_prediction_inference.csv")
+        (ch_config_for_analysis, ch_infer_csv) = infer_from_data(ch_model_to_infer_config.view(), params.exp_name, ch_test_data.view(), output_name, datetime_string, params.output_dir)
         ch_config_for_analysis.view()
     } else {
-        ch_config_for_analysis = Channel.fromPath("${params.output_dir}/configs/analysis/xgboost_analysis_config.yml", checkIfExists: true)
-        ch_infer_csv = Channel.fromPath("${params.output_dir}/Modelling/data/predicted/*.csv", checkIfExists: true)
+        ch_config_for_analysis = Channel.fromPath("$PWD/${params.output_dir}/configs/analysis/xgboost_analysis_config.yml", checkIfExists: true)
+        ch_infer_csv = Channel.fromPath("$PWD/${params.output_dir}/Modelling/data/predicted/*.csv", checkIfExists: true)
         ch_config_for_analysis.view()
         print("Inference from data not performed")
     }
 
-    if (params.analyze == true) {
+   // println "Checking channel content before ifEmpty check"
+   // ch_config_for_analysis.view()
+
+   // ch_config_for_analysis.ifEmpty {
+    //    print("Analysis config is empty. Exiting")
+//    }.set { ch_config_for_analysis_non_empty }
+
+    // Now, check if analyze_dataset is true
+     if (params.analyze == true) {
         if (!params.exp_name) {
-            ch_exp_name = expName.map { mostRecentFile ->
-                def experiment_name = mostRecentFile.trim()
-                return experiment_name
+            if  (expName == null || expName.isEmpty()) {
+                ch_exp_name = Channel.of(${params.model_type}_model_${datetime_string})
+                println "Experiment name is empty. Using default name: ${params.model_type}_${datetime_string}"
+                ch_exp_name.view()  
+                ch_analysis_out = analyze_dataset(ch_config_for_analysis, ch_exp_name.view() , ch_infer_csv.view(), datetime_string, params.output_dir)
+                ch_analysis_out.view()
             }
-            ch_analysis_out = analyze_dataset(ch_config_for_analysis, ch_exp_name.view(), ch_infer_csv.view(), datetime_string)
-            ch_analysis_out.view()
+            else {
+             //   ch_exp_name = Channel.of(${params.model_type}_model_${datetime_string}) 
+              //  ch_analysis_out = analyze_dataset(ch_config_for_analysis, ch_exp_name.view() , ch_infer_csv.view(), datetime_string)
+              //  ch_analysis_out.view()
+                ch_exp_name = expName.map { mostRecentFile ->
+                    def experiment_name = mostRecentFile.trim()
+                    return experiment_name
+                }
+                ch_analysis_out = analyze_dataset(ch_config_for_analysis, ch_exp_name.view(), ch_infer_csv.view(), datetime_string, params.output_dir)
+                ch_analysis_out.view()
+            }
         } else {
-            ch_analysis_out = analyze_dataset(ch_config_for_analysis, params.exp_name, ch_infer_csv.view(), datetime_string)
+            ch_analysis_out = analyze_dataset(ch_config_for_analysis, params.exp_name, ch_infer_csv.view(), datetime_string, params.output_dir)
             ch_analysis_out.view() }
     } else {
         print("Analysis not performed")
     }
+    
 }
 
 /* 
