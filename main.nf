@@ -63,7 +63,7 @@ process PRINT_PATH {
 
 process GetDateTimeAsString {
     output:
-    stdout 
+    stdout
 
     script:
     """
@@ -95,6 +95,7 @@ params.analyze = params.analyze ?: true
 
 
 workflow {
+    def expName = null
     datetime_string = GetDateTimeAsString()
      
     mut_file	   = Channel.fromPath("${params.mutations_data}")
@@ -157,7 +158,8 @@ workflow {
             println "here specify train as false and here is model for infer"
             ch_model_to_infer_config.view()
         } else {
-            ch_model_to_infer_config = Channel.fromPath("$PWD/{params.output_dir}/Modelling/output/models/${params.exp_name}/config/model_config.yml", checkIfExists: true)
+            expName = params.exp_name
+            ch_model_to_infer_config = Channel.fromPath("$PWD/${params.output_dir}/Modelling/output/models/${params.exp_name}/config/model_config.yml", checkIfExists: true)
             ch_train_model_json = Channel.fromPath("$PWD/${params.output_dir}/Modelling/output/models/${params.exp_name}/model/model.json", checkIfExists: true)
             ch_model_to_infer_config.view()
         }
@@ -186,39 +188,39 @@ workflow {
 
    // println "Checking channel content before ifEmpty check"
    // ch_config_for_analysis.view()
-
-   // ch_config_for_analysis.ifEmpty {
-    //    print("Analysis config is empty. Exiting")
-//    }.set { ch_config_for_analysis_non_empty }
-
-    // Now, check if analyze_dataset is true
+   // Now, check if analyze_dataset is true
      if (params.analyze == true) {
-        if (!params.exp_name) {
+        if (!params.exp_name && params.preprocess_datasets == true) {
             if  (expName == null || expName.isEmpty()) {
-                ch_exp_name = Channel.of(${params.model_type}_model_${datetime_string})
-                println "Experiment name is empty. Using default name: ${params.model_type}_${datetime_string}"
-                ch_exp_name.view()  
-                ch_analysis_out = analyze_dataset(ch_config_for_analysis, ch_exp_name.view() , ch_infer_csv.view(), datetime_string, params.output_dir)
-                ch_analysis_out.view()
-            }
-            else {
-             //   ch_exp_name = Channel.of(${params.model_type}_model_${datetime_string}) 
-              //  ch_analysis_out = analyze_dataset(ch_config_for_analysis, ch_exp_name.view() , ch_infer_csv.view(), datetime_string)
-              //  ch_analysis_out.view()
-                ch_exp_name = expName.map { mostRecentFile ->
-                    def experiment_name = mostRecentFile.trim()
-                    return experiment_name
+                // Collect the datetime from the channel
+                datetime_string
+                    .map { it.trim() }
+                    .set { collected_datetime }
+                // Define a channel with the desired filename format
+                ch_exp_name = collected_datetime.map { datetime ->
+                    "${params.model_type}_${datetime}"
                 }
+                ch_exp_name.subscribe { ch_exp_name_val ->
+                    println "Experiment name is empty. Using default name: ${ch_exp_name_val}"
+                }
+                // Use the extracted value in the analysis
                 ch_analysis_out = analyze_dataset(ch_config_for_analysis, ch_exp_name.view(), ch_infer_csv.view(), datetime_string, params.output_dir)
                 ch_analysis_out.view()
+            } 
+        else {
+            ch_exp_name = expName.map { mostRecentFile ->
+                def experiment_name = mostRecentFile.trim()
+                return experiment_name
             }
+            println "Experiment name is empty. Using most recent experiment : ${ch_exp_name.view()}"
+            ch_analysis_out = analyze_dataset(ch_config_for_analysis, ch_exp_name.view(), ch_infer_csv.view(), datetime_string , params.output_dir)
+            ch_analysis_out.view()}
         } else {
             ch_analysis_out = analyze_dataset(ch_config_for_analysis, params.exp_name, ch_infer_csv.view(), datetime_string, params.output_dir)
             ch_analysis_out.view() }
     } else {
         print("Analysis not performed")
     }
-    
 }
 
 /* 
