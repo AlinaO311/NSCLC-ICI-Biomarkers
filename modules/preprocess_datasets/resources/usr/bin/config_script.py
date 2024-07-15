@@ -55,7 +55,7 @@ if __name__ == "__main__":
                         colsample_bytree: 0.6
                         }
                 preprocessed_data_path:
-                gt_column: "PFS_STATUS"
+                gt_column: "DURABLE_CLINICAL_BENEFIT"
         """
         yaml.preserve_quotes = True
         yaml.explicit_start = True
@@ -106,7 +106,7 @@ if __name__ == "__main__":
                                   ]
                         }, # For binary classification the final layer must be size 1 with sigmoid activation.
              'preprocessed_data_path': latest_file,
-             'gt_column': "PFS_STATUS" }
+             'gt_column': "DURABLE_CLINICAL_BENEFIT" }
         json_string = json.dumps(yml_dict)
         data = yaml.load(json_string)
         # the following sets flow-style for the root level mapping only
