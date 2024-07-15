@@ -27,7 +27,7 @@ process infer_from_data {
       DATE_VALUE='$datetime_string'
       export DATE_VALUE
       PYTHONPATH=$baseDir/bin/src infer.py --experiment_folder ${config_file} --data_path ${data_path} --output_file $infer_outfile --dir ${params.output_dir}
-      PYTHONPATH=$baseDir/bin/src config_script.py --config_path $config_file --output_file $infer_outfile --dir ${params.output_dir}
+      PYTHONPATH=$baseDir/bin/src config_script.py --config_path $config_file --output_file $infer_outfile --outdir ${params.output_dir}
       """
 
     else
@@ -35,7 +35,7 @@ process infer_from_data {
       DATE_VALUE='$datetime_string'
       export DATE_VALUE
       PYTHONPATH=$baseDir/bin/src infer.py --experiment_folder ${params.exp_name} --data_path ${data_path} --output_file $infer_outfile --dir ${params.output_dir}
-      PYTHONPATH=$baseDir/bin/src config_script.py --config_path $config_file --output_file $infer_outfile --dir ${params.output_dir}
+      PYTHONPATH=$baseDir/bin/src config_script.py --config_path $config_file --output_file $infer_outfile --outdir ${params.output_dir}
       """
 
 }
