@@ -17,14 +17,14 @@ process analyze_dataset {
       """
       DATE_VALUE='$datetime_string'
       export DATE_VALUE
-      PYTHONPATH=$baseDir/bin/src analyze.py --analysis_config ${config_file} --experiment_dir ${experiment_name} --data_path ${data_path} --dir ${output_dir}
+      PYTHONPATH=$baseDir/bin/src analyze.py --analysis_config ${config_file} --experiment_dir ${experiment_name} --data_path ${data_path} --dir ${params.output_dir}
       """
 
     else
       """
       DATE_VALUE='$datetime_string'
       export DATE_VALUE
-      PYTHONPATH=$baseDir/bin/src analyze.py --analysis_config ${config_file} --experiment_dir ${params.exp_name} --data_path ${data_path} --dir ${output_dir}
+      PYTHONPATH=$baseDir/bin/src analyze.py --analysis_config ${config_file} --experiment_dir ${params.exp_name} --data_path ${data_path}  --dir ${params.output_dir}
       """
 
 }
