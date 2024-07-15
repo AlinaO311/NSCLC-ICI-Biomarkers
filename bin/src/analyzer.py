@@ -4,15 +4,16 @@ import os
 import json
 from pathlib import Path
 from typing import Any, Dict, List, Optional
-
+import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
+import seaborn as sns
 from sklearn.metrics import accuracy_score, precision_recall_fscore_support
 
 from dataloader import DataLoader
 from models import (KERAS_MODEL_NAME, XGBOOST_MODEL_NAME, KerasFeedForward,
                         XGBoost)
-from plots import (confusion_matrix, histogram, scatter_plot,
+from plots import (_confusion_matrix, histogram, scatter_plot, stacked_bar_plot,
                        scatter_tsne_2d)
 from utils import prepare_save_folder, read_config
 
@@ -62,6 +63,7 @@ class Analyzer:
 
         if not data_path:
             data_path = Path(self.analysis_config["prediction_data_path"])
+            print(data_path)
         self.analysis_config["prediction_data_path"] = str(data_path)
 
         self.dataloader = DataLoader(data_path, self.model_config["gt_column"])
@@ -115,45 +117,51 @@ class Analyzer:
             plotargs -- Any additional arguments for the plot function.
         """
         data = self.dataloader.get_complete_data()
+        data.columns = data.columns.str.strip()
 
-        confusion_matrix(
-            ground_truth_labels=data[ground_truth_col],
-            predicted_labels=data[prediction_col],
-            class_labels=["Non-Responder", "Responder"],
-            imshow_kwargs=plotargs,
+        # Define class labels
+        class_labels = ["Non-Responder", "Responder"]
+        # Map numeric labels to class labels
+        data['ground_truth_labels'] = data[ground_truth_col].map({0: "Non-Responder", 1: "Responder"})
+        data['predicted_labels'] = data[prediction_col].map({0: "Non-Responder", 1: "Responder"})
+        uniq_labels = np.unique(np.concatenate((data['ground_truth_labels'], data['predicted_labels']))).tolist()
+#        minimal_data = pd.DataFrame({
+ #       'ground_truth_labels': ['Non-Responder', 'Responder', 'Responder', 'Non-Responder'],
+  #      'predicted_labels': ['Responder', 'Responder', 'Non-Responder', 'Non-Responder']
+   #     })
+    #    ground_truth_labels = minimal_data['ground_truth_labels'].astype(str)
+     #   predicted_labels = minimal_data['predicted_labels'].astype(str)
+      #  class_labels = ['Non-Responder', 'Responder']
+        # Compute confusion matrix for minimal example
+        _confusion_matrix(
+        data['ground_truth_labels'],
+        data['predicted_labels'],
+        class_labels
         )
-        print(f"Saving '{output_name}.png' confusion_matrix plot.")
-        plt.subplots_adjust(left=0.1, right=0.9, bottom=0.3, top=0.9)
-        plt.savefig( os.path.join(save_path , "analysis", output_name , ".png"))
+        plt.tight_layout()
+        return plt.savefig( os.path.join(save_path , "analysis", output_name+".png" ))
 
-    def _plot_scatter_plot(
+    def _plot_stacked_bar_plot(
         self,
         save_path: Path,
         output_name: str,
-        x_column: str,
-        y_column: str,
-        color_column: str,
         plotargs: Dict[str, Any] = {},
     ) -> None:
-        """Create a scatter plot of two specified columns and save the result.
+        """Create a stacked bar plot of a given column and save the result.
 
         Arguments:
             save_path -- The path where to save the result.
-            output_name -- The desired name of the resulting scatter plot image.
-            x_column -- The name of the column used for the x-values.
-            y_column -- The name of the column used for the y-values.
-            color_column -- A color specification.
+            output_name -- The desired name of the resulting plot image.
+            column -- The name of the data column to use for the stacked bar plot.
 
         Keyword Arguments:
-            plotargs -- Any additional arguments for the plot function.
+            plotargs -- Any additional kwargs to the plot function.
         """
         data = self.dataloader.get_complete_data()
-        df = data[[x_column, y_column, color_column]]
-
-        scatter_plot(df.dropna(), x_column, y_column, color_column, plotargs)
-
-        print(f"Saving '{output_name}.png' scatter plot.")
-        plt.savefig( os.path.join(save_path, "analysis",output_name,".png"), bbox_inches="tight")
+        print("stacked bar plot data: ", data.head())
+        stacked_bar_plot(data, plotargs)
+        print(f"Saving '{output_name}.png' stacked bar plot.")
+        plt.savefig( os.path.join(save_path, "analysis", output_name+".png"), bbox_inches="tight")
 
     def _plot_histogram(
         self,
@@ -175,11 +183,11 @@ class Analyzer:
             plotargs -- Any additional kwargs to the plot function.
         """
         data = self.dataloader.get_complete_data()
-
+        print("histogram data demo: ", data.head())
         histogram(data[column].dropna(), type, plotargs)
-
         print(f"Saving '{output_name}.png' histogram.")
-        plt.savefig( os.path.join(save_path,"analysis", output_name,".png"), bbox_inches="tight")
+        plt.savefig( os.path.join(save_path,"analysis", output_name+".png"), bbox_inches="tight")
+
 
     def _tsne_2d(
         self,
@@ -205,7 +213,8 @@ class Analyzer:
         scatter_tsne_2d(data, columns, groupby, plotargs)
 
         print(f"Saving '{output_name}' tnse 2d plot...")
-        plt.savefig( os.path.join(save_path, "analysis", output_name, ".png"), bbox_inches="tight")
+        plt.savefig( os.path.join(save_path, "analysis", output_name+".png"), bbox_inches="tight")
+
 
     def _prepare_save_folder(self) -> Path:
         """Prepares a folder to store the metrics and plots in."""
@@ -215,6 +224,8 @@ class Analyzer:
         analysis_output_dir = prepare_save_folder(
             self.output_path, "analysis", ["config", "analysis"], configs
         )
+
+        print('analysis_output_dir : '+analysis_output_dir)
         return analysis_output_dir
 
     def _save_metrics(self, save_path: Path) -> None:
@@ -243,47 +254,45 @@ class Analyzer:
             print("Saving metrics.")
             f.write(f"Metrics: {json.dumps(result, indent=0)}")
 
+
     def analyse(self) -> None:
         """Perfom the analysis according to the config file and save the
         results in the spacified output location."""
         # Prepare save folder
-        output_dir = self._prepare_save_folder()
+        analysis_output_dir = self._prepare_save_folder()
         config_keys = self.analysis_config.keys()
 
         # Calculate metrics.
         if self.analysis_config.get("metrics", False):
             print("\n-----Calculating metrics.----")
-            self._save_metrics(output_dir)
+            self._save_metrics(analysis_output_dir)
 
         # Explain model with eli5.
         if self.analysis_config.get("explain_model_weights_eli5", False):
             assert self.model_path, "No model path given."
             print("\n----Performing eli5 analysis.----")
-            self._eli5_model_weights(output_dir)
+            self._eli5_model_weights(analysis_output_dir)
 
         # Create confusion matrices.
         if "confusion_matrix" in config_keys:
             print("\n-----Plotting confusion matrices.----")
             for matrix_conf in self.analysis_config["confusion_matrix"]:
-                self._plot_confusion_matrix(output_dir, **matrix_conf)
+                self._plot_confusion_matrix(analysis_output_dir, **matrix_conf)
 
         # Create histograms.
         if "histogram" in config_keys:
             print("\n-----Plotting histograms.----")
             for hist in self.analysis_config["histogram"]:
-                self._plot_histogram(output_dir, **hist)
+                self._plot_histogram(analysis_output_dir, **hist)
 
-        # Create scatterplots.
-        if "scatter_plot" in config_keys:
-            print("\n-----Plotting scatter plots.----")
-            for plot in self.analysis_config["scatter_plot"]:
-                self._plot_scatter_plot(output_dir, **plot)
+         #Create stacked bar plots.
+        if "stacked_bar_plot" in config_keys:
+            print("\n-----Plotting stacked bar plots.----")
+            for stacked_bar in self.analysis_config["stacked_bar_plot"]:
+                self._plot_stacked_bar_plot(analysis_output_dir, **stacked_bar)
 
-        # Create TNSE 2D plot (only numerical data).
-        if "tsne_2d" in config_keys:
-            print("\n-----Plotting TSNE_2D plots.----")
-            for tsne_conf in self.analysis_config["tsne_2d"]:
-                self._tsne_2d(output_dir, **tsne_conf)
+
 
         print(f"\nResults saved to {analysis_output_dir}")
+        return analysis_output_dir
 
