@@ -188,35 +188,37 @@ workflow {
 
    // println "Checking channel content before ifEmpty check"
    // ch_config_for_analysis.view()
-   // Now, check if analyze_dataset is true
+
+   // ch_config_for_analysis.ifEmpty {
+    //    print("Analysis config is empty. Exiting")
+//    }.set { ch_config_for_analysis_non_empty }
+
+    // Now, check if analyze_dataset is true
      if (params.analyze == true) {
         if (!params.exp_name && params.preprocess_datasets == true) {
             if  (expName == null || expName.isEmpty()) {
-                // Collect the datetime from the channel
+	        // Collect the datetime from the channel
                 datetime_string
                     .map { it.trim() }
                     .set { collected_datetime }
+
+                datetime_string.subscribe { datetime_val ->
+                println "testing datetime_val ${datetime_val}"
                 // Define a channel with the desired filename format
-                ch_exp_name = collected_datetime.map { datetime ->
-                    "${params.model_type}_${datetime}"
-                }
-                ch_exp_name.subscribe { ch_exp_name_val ->
-                    println "Experiment name is empty. Using default name: ${ch_exp_name_val}"
-                }
+                def ch_exp_name = Channel.of("${params.model_type}_model_${datetime_val}")
                 // Use the extracted value in the analysis
                 ch_analysis_out = analyze_dataset(ch_config_for_analysis, ch_exp_name.view(), ch_infer_csv.view(), datetime_string, params.output_dir)
-                ch_analysis_out.view()
-            } 
-        else {
-            ch_exp_name = expName.map { mostRecentFile ->
+                ch_analysis_out.view() }
+            } else {
+                ch_exp_name = expName.map { mostRecentFile ->
                 def experiment_name = mostRecentFile.trim()
                 return experiment_name
             }
-            println "Experiment name is empty. Using most recent experiment : ${ch_exp_name.view()}"
-            ch_analysis_out = analyze_dataset(ch_config_for_analysis, ch_exp_name.view(), ch_infer_csv.view(), datetime_string , params.output_dir)
+            println "Experiment name is empty. Using most recent experiment : ${ch_exp_name}"
+            ch_analysis_out = analyze_dataset(ch_config_for_analysis, ch_exp_name.view(), ch_infer_csv.view(), datetime_string, params.output_dir)
             ch_analysis_out.view()}
         } else {
-            ch_analysis_out = analyze_dataset(ch_config_for_analysis, params.exp_name, ch_infer_csv.view(), datetime_string, params.output_dir)
+            ch_analysis_out = analyze_dataset(ch_config_for_analysis, ch_exp_name.view(), ch_infer_csv.view(), datetime_string, params.output_dir)
             ch_analysis_out.view() }
     } else {
         print("Analysis not performed")
@@ -229,3 +231,5 @@ workflow {
 workflow.onComplete {
 	log.info ( workflow.success ? '\nDone!' : '\nOops .. something went wrong' )
 }
+
+
