@@ -106,17 +106,21 @@ class FetchData(object):
                    if entry in file_inlist:
                        path_list.append(os.path.join(cwd , 'Data', study , entry) )
         for file_path in path_list:
+            with open(file_path, 'rb') as f:
+                raw_data = f.read(10000)
+                result = chardet.detect(raw_data)
+                encoding = result['encoding']
             if 'patient' in file_path and os.path.isfile(file_path):
             # Read data files:
-                df = pd.read_csv(file_path, comment='#',header=0, delimiter='\t', low_memory=False)
+                df = pd.read_csv(file_path, comment='#',header=0, delimiter='\t', low_memory=False, encoding=encoding)
                 patientSets[file_path] = df
                 print("Successfully read: " + file_path)
             if 'sample' in file_path and  os.path.isfile(file_path):
-                df = pd.read_csv(file_path, comment='#',header=0, delimiter='\t', low_memory=False)
+                df = pd.read_csv(file_path, comment='#',header=0, delimiter='\t', low_memory=False, encoding=encoding)
                 sampleSets[file_path] = df
                 print("Successfully read: " + file_path)
             if 'mutations' in file_path and  os.path.isfile(file_path):
-                df = pd.read_csv(file_path, comment='#',header=0, delimiter='\t', low_memory=False)
+                df = pd.read_csv(file_path, comment='#',header=0, delimiter='\t', low_memory=False, encoding=encoding)
                 mutSets[file_path] = df
                 print("Successfully read: " + file_path)
         return patientSets, sampleSets, mutSets 
