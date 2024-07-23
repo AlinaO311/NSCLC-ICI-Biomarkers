@@ -1,8 +1,9 @@
 process analyze_dataset {
-    publishDir "${params.output_dir}"
+    publishDir "${params.output_dir}",
+    mode:'copy'  
 
     output:
-    path "analysis/*" , emit: analysis_outputs
+    stdout
 
     input:
     val config_file
