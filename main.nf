@@ -135,8 +135,6 @@ workflow {
         ch_train_config = Channel.fromPath("${params.output_dir}/configs/models/*.yml",  checkIfExists: true )
         ch_train_data = Channel.fromPath("${params.output_dir}/Modelling/data/preprocessed/${params.preproc_data}/data/train_data.csv")
         ch_test_data = Channel.fromPath("${params.output_dir}/Modelling/data/preprocessed/${params.preproc_data}/data/test_data.csv")
-        println "here is train config"
-        ch_train_config.view()
     }
 
     // train data
@@ -158,10 +156,10 @@ workflow {
             println "here specify train as false and here is model for infer"
             ch_model_to_infer_config.view()
         } else {
+            println "Train step is disabled."
             expName = params.exp_name
             ch_model_to_infer_config = Channel.fromPath("$PWD/${params.output_dir}/Modelling/output/models/${params.exp_name}/config/model_config.yml", checkIfExists: true)
             ch_train_model_json = Channel.fromPath("$PWD/${params.output_dir}/Modelling/output/models/${params.exp_name}/model/model.json", checkIfExists: true)
-            ch_model_to_infer_config.view()
         }
     }
 
@@ -172,18 +170,14 @@ workflow {
     // predict data 
     // 1 ) do we perform inference, yes = true, no = false
     if (params.infer_from_data == true) {
+        println "Infer from Data is enabled."
         // 2) if yes, is experiment name empty or not given
-        if (!params.exp_name) {
-            params.exp_name = ""; // Set default value if not provided
-        }
         output_name = Channel.of("${params.model_type}_model_prediction_inference.csv")
         (ch_config_for_analysis, ch_infer_csv) = infer_from_data(ch_model_to_infer_config.view(), params.exp_name, ch_test_data.view(), output_name, datetime_string, params.output_dir)
-        ch_config_for_analysis.view()
     } else {
         ch_config_for_analysis = Channel.fromPath("$PWD/${params.output_dir}/configs/analysis/xgboost_analysis_config.yml", checkIfExists: true)
         ch_infer_csv = Channel.fromPath("$PWD/${params.output_dir}/Modelling/data/predicted/*.csv", checkIfExists: true)
-        ch_config_for_analysis.view()
-        print("Inference from data not performed")
+        println "Inference from data not performed"
     }
 
    // println "Checking channel content before ifEmpty check"
@@ -192,37 +186,45 @@ workflow {
    // ch_config_for_analysis.ifEmpty {
     //    print("Analysis config is empty. Exiting")
 //    }.set { ch_config_for_analysis_non_empty }
-
     // Now, check if analyze_dataset is true
-     if (params.analyze == true) {
+    if (params.analyze == true) {
+        println "Analysis is enabled."
         if (!params.exp_name && params.preprocess_datasets == true) {
+            println "Experiment name is not provided and preprocessing datasets is enabled."
             if  (expName == null || expName.isEmpty()) {
-	        // Collect the datetime from the channel
+                println "Experiment name is null or empty."
+                // Collect the datetime from the channel
                 datetime_string
                     .map { it.trim() }
                     .set { collected_datetime }
 
-                datetime_string.subscribe { datetime_val ->
-                println "testing datetime_val ${datetime_val}"
                 // Define a channel with the desired filename format
-                def ch_exp_name = Channel.of("${params.model_type}_model_${datetime_val}")
+                ch_exp_name = collected_datetime.map { datetime ->
+                    "${params.model_type}_model_${datetime_string}"
+                }
+                println "Experiment name is empty ${ch_exp_name.view()}"               
                 // Use the extracted value in the analysis
                 ch_analysis_out = analyze_dataset(ch_config_for_analysis, ch_exp_name.view(), ch_infer_csv.view(), datetime_string, params.output_dir)
-                ch_analysis_out.view() }
+                ch_analysis_out.view() 
             } else {
+                println "Experiment name is not empty. Using most recent experiment."
                 ch_exp_name = expName.map { mostRecentFile ->
                 def experiment_name = mostRecentFile.trim()
                 return experiment_name
             }
-            println "Experiment name is empty. Using most recent experiment : ${ch_exp_name}"
+            println "Experiment name is empty. Using most recent experiment : ${ch_exp_name.view()}"
             ch_analysis_out = analyze_dataset(ch_config_for_analysis, ch_exp_name.view(), ch_infer_csv.view(), datetime_string, params.output_dir)
             ch_analysis_out.view()}
         } else {
-            ch_analysis_out = analyze_dataset(ch_config_for_analysis, ch_exp_name.view(), ch_infer_csv.view(), datetime_string, params.output_dir)
-            ch_analysis_out.view() }
+            println "Using given experiment : ${params.exp_name}"
+            ch_config_for_analysis.view()
+            ch_infer_csv.view()
+            ch_analysis_out = analyze_dataset(ch_config_for_analysis, params.exp_name, ch_infer_csv.view(), datetime_string, params.output_dir)
+            }
     } else {
         print("Analysis not performed")
     }
+
 }
 
 /* 
