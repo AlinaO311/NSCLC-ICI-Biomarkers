@@ -294,5 +294,5 @@ class Analyzer:
 
 
         print(f"\nResults saved to {analysis_output_dir}")
-        return analysis_output_dir
+#        return analysis_output_dir
 
