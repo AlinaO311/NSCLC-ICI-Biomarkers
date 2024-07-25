@@ -110,7 +110,7 @@ workflow {
 	    mut_file = mut_file.collect()
 
         (ch_preproc_config, ch_data) = fetch_dataset(params.dataset_names, params.datatype, params.mutations_data, datetime_string)
-        print(ch_preproc_config)
+        println "Preview of fetch dataset harmonized data output channel."
         ch_data.view()
     }
     // otherwise load input files: need DataPrep/*.tsv & config
@@ -129,7 +129,7 @@ workflow {
     if ( params.preprocess == true ) {
         // if preprocess of dataset needed for categorical processing, creating train/test sets
         (ch_preproc_config, ch_train_config, ch_train_data, ch_test_data)  = preprocess_datasets(ch_preproc_config, params.cols_to_remove, params.model_type, datetime_string) 
-        ch_train_config.view()
+     //   ch_train_config.view()
     } // else load previously generated train, test sets
     else {
         ch_train_config = Channel.fromPath("${params.output_dir}/configs/models/*.yml",  checkIfExists: true )
@@ -140,7 +140,8 @@ workflow {
     // train data
     if (params.train == true) {
         (ch_train_model_json, ch_model_to_infer_config) = train_data(ch_train_config, datetime_string)
-        ch_model_to_infer_config.view()
+      //  println "Preview of model that will be used for inference: "
+     //   ch_model_to_infer_config.view()
     } else {
         if (!params.exp_name) {
             base = "$PWD/${params.output_dir}/Modelling/output/models"
@@ -153,19 +154,18 @@ workflow {
                  def fullPath_json = "${base}/${mostRecentFile.trim()}/model/model.json"
                  return fullPath_json
              }
-            println "here specify train as false and here is model for infer"
-            ch_model_to_infer_config.view()
+         //   println "Preview of model that will be used for inference in case of using latest experiment:"
+       //     ch_model_to_infer_config.view()
         } else {
             println "Train step is disabled."
             expName = params.exp_name
             ch_model_to_infer_config = Channel.fromPath("$PWD/${params.output_dir}/Modelling/output/models/${params.exp_name}/config/model_config.yml", checkIfExists: true)
             ch_train_model_json = Channel.fromPath("$PWD/${params.output_dir}/Modelling/output/models/${params.exp_name}/model/model.json", checkIfExists: true)
+          //  println "Preview of model config that will be used from Training: "
+        //    ch_model_to_infer_config.view()
         }
     }
 
-  //  train_conf = ch_train_model_config.collect()
-  //  test_data = ch_test_data.collect()
-  //  train_conf.view()
 
     // predict data 
     // 1 ) do we perform inference, yes = true, no = false
@@ -174,19 +174,17 @@ workflow {
         // 2) if yes, is experiment name empty or not given
         output_name = Channel.of("${params.model_type}_model_prediction_inference.csv")
         (ch_config_for_analysis, ch_infer_csv) = infer_from_data(ch_model_to_infer_config.view(), params.exp_name, ch_test_data.view(), output_name, datetime_string, params.output_dir)
+    //    println "Preview of analysis config that will be used for Inferring data: "
+      //  ch_config_for_analysis.view()
     } else {
         ch_config_for_analysis = Channel.fromPath("$PWD/${params.output_dir}/configs/analysis/xgboost_analysis_config.yml", checkIfExists: true)
         ch_infer_csv = Channel.fromPath("$PWD/${params.output_dir}/Modelling/data/predicted/*.csv", checkIfExists: true)
         println "Inference from data not performed"
+  //      println "Preview of analysis config that will be used for Inferring data: "
+//        ch_config_for_analysis.view()
     }
 
-   // println "Checking channel content before ifEmpty check"
-   // ch_config_for_analysis.view()
-
-   // ch_config_for_analysis.ifEmpty {
-    //    print("Analysis config is empty. Exiting")
-//    }.set { ch_config_for_analysis_non_empty }
-    // Now, check if analyze_dataset is true
+    // analyze data
     if (params.analyze == true) {
         println "Analysis is enabled."
         if (!params.exp_name && params.preprocess_datasets == true) {
@@ -204,8 +202,8 @@ workflow {
                 }
                 println "Experiment name is empty ${ch_exp_name.view()}"               
                 // Use the extracted value in the analysis
-                ch_analysis_out = analyze_dataset(ch_config_for_analysis, ch_exp_name.view(), ch_infer_csv.view(), datetime_string, params.output_dir)
-                ch_analysis_out.view() 
+          //      println "Preview of config being used for analysis : ${ch_config_for_analysis.view()}"
+                analyze_dataset(ch_config_for_analysis, ch_exp_name.view(), ch_infer_csv.view(), datetime_string, params.output_dir)
             } else {
                 println "Experiment name is not empty. Using most recent experiment."
                 ch_exp_name = expName.map { mostRecentFile ->
@@ -213,13 +211,14 @@ workflow {
                 return experiment_name
             }
             println "Experiment name is empty. Using most recent experiment : ${ch_exp_name.view()}"
-            ch_analysis_out = analyze_dataset(ch_config_for_analysis, ch_exp_name.view(), ch_infer_csv.view(), datetime_string, params.output_dir)
-            ch_analysis_out.view()}
+            println "Preview of config being used for analysis : ${ch_config_for_analysis.view()}"
+            analyze_dataset(ch_config_for_analysis, ch_exp_name.view(), ch_infer_csv.view(), datetime_string, params.output_dir)
+            }
         } else {
             println "Using given experiment : ${params.exp_name}"
-            ch_config_for_analysis.view()
-            ch_infer_csv.view()
-            ch_analysis_out = analyze_dataset(ch_config_for_analysis, params.exp_name, ch_infer_csv.view(), datetime_string, params.output_dir)
+        //    println "Preview of config being used for analysis : ${ch_config_for_analysis.view()}"
+        //    println "Preview of config being used for analysis : ${ch_infer_csv.view()}"
+            analyze_dataset(ch_config_for_analysis, params.exp_name, ch_infer_csv.view(), datetime_string, params.output_dir)
             }
     } else {
         print("Analysis not performed")
