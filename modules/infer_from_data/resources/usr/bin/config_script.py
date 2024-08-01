@@ -36,7 +36,7 @@ if __name__ == "__main__":
     train_name = config_to_load['training_name']
     time_val = set_datetime.strip()
 
-    latest_file = os.path.join(cwd, args.outdir,'Modelling','data','predicted', train_name+'_prediction_inference.csv')
+    latest_file = os.path.join(os.getcwd(), train_name+'_prediction_inference.csv')
     # Read the tab-separated file
     df = pd.read_csv(latest_file, sep=',')
    
