@@ -13,11 +13,17 @@ cwd=os.getcwd().split('work', 1)[0]
 
 def main(experiment_folder: Path, dir: Path , data_path: Path, output_file: Path) -> None:
     assert output_file.suffix == ".csv", "ERROR: Output file does not have `.csv` extension! Exiting."
-    pathlist = os.path.dirname(data_path).split('/')[:-3]
-    print('pathlist', pathlist)#
-    pathlist = ['/' if x == '' else x for x in pathlist]
-    model_path = os.path.join(*pathlist[:-1], "output" , "models", experiment_folder, "model")
-    model_config_path = os.path.join(*pathlist[:-1],  "output" , "models", experiment_folder, "config/model_config.yml")  # config file from exp_name
+    if os.path.exists(experiment_folder):
+        pathlist = os.path.dirname(experiment_folder).split('/')[:-1]
+        pathlist = ['/' if x == '' else x for x in pathlist]
+        model_path = os.path.join(*pathlist, "model")
+        print('model path: '+model_path)
+        model_config_path = experiment_folder
+    else:
+        pathlist = os.path.dirname(data_path).split('/')[:-3]
+        pathlist = ['/' if x == '' else x for x in pathlist]
+        model_path = os.path.join(*pathlist[:-1],  "output" , "models", experiment_folder,  "model")
+        model_config_path = os.path.join(*pathlist[:-1],  "output" , "models", experiment_folder, "config", "model_config.yml")  # config file from exp_name
     trainer = Trainer(model_config_path, resume_model=model_path, data_path=data_path)
     trainer.predict(output_file)
 
