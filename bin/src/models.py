@@ -14,9 +14,6 @@ import xgboost as xgb
 import psutil
 from sklearn.model_selection import KFold, cross_val_score
 from tensorflow import keras
-from dask.distributed import Client
-import dask.dataframe as dd
-import dask_ml.model_selection as dms
 
 
 XGBOOST_MODEL_NAME = "xgboost"
