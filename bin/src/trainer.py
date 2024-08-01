@@ -47,8 +47,10 @@ class Trainer:
                 training data is configured using the config file. (default: {None})
         """
         self.config = read_config(config_path)
-
-        if not data_path:
+        
+        if "data_path" in self.config and self.config["data_path"] :
+            data_path = Path(self.config["data_path"])
+        else:
             data_path = Path(self.config["preprocessed_data_path"])
         self.dataloader = DataLoader(data_path, self.config["gt_column"])
         self.dataloader.load_data()
@@ -117,7 +119,9 @@ class Trainer:
     def train(self) -> None:
         """Train the model using the training data (specified in the config file)."""
         x_train = self.dataloader.get_data()
+        print(x_train.apply(lambda x: x.unique()))
         y_train = self.dataloader.get_ground_truth()
+        print(y_train.unique())
 
         print("\n\nSummarising training data before training:\n")
         x_train.info(memory_usage=False) # Prints info.
