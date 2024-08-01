@@ -39,7 +39,7 @@ log.info """\
         predict_train   : ${params.predict_train}
         predict_test    : ${params.predict_test}
 
-        experiment_name : ${params.exp_name}
+        exp_name : ${params.exp_name}
 
         analyze         : ${params.analyze}
 
@@ -92,7 +92,7 @@ params.preprocess = params.preprocess ?: true
 params.train = params.train ?: true
 params.infer_from_data = params.infer_from_data ?: true
 params.analyze = params.analyze ?: true
-
+params.exp_name = params.exp_name ?: false
 
 workflow {
     def expName = null
@@ -132,37 +132,55 @@ workflow {
      //   ch_train_config.view()
     } // else load previously generated train, test sets
     else {
-        ch_train_config = Channel.fromPath("${params.output_dir}/configs/models/*.yml",  checkIfExists: true )
-        ch_train_data = Channel.fromPath("${params.output_dir}/Modelling/data/preprocessed/${params.preproc_data}/data/train_data.csv")
-        ch_test_data = Channel.fromPath("${params.output_dir}/Modelling/data/preprocessed/${params.preproc_data}/data/test_data.csv")
+         def preprocDir = new File("${params.output_dir}/configs/preprocess/")
+         def ymlFiles = preprocDir.listFiles(new FilenameFilter() {
+            public boolean accept(File dir, String name) {
+            return name.toLowerCase().endsWith(".yml")
+            }
+         })
+         if (ymlFiles == null || ymlFiles.length == 0) {
+             // Simply continue if the directory does not exist
+             println("No preprocess Directory, continuing...")
+         } else {
+            ch_train_config = Channel.fromPath("${params.output_dir}/configs/preprocess/*.yml", checkIfExists: true)
+            ch_train_data = Channel.fromPath("${params.output_dir}/Modelling/data/preprocessed/${params.preproc_data}/data/train_data.csv")
+            ch_test_data = Channel.fromPath("${params.output_dir}/Modelling/data/preprocessed/${params.preproc_data}/data/test_data.csv")
+         }
     }
 
-    // train data
+    // mod train data
     if (params.train == true) {
         (ch_train_model_json, ch_model_to_infer_config) = train_data(ch_train_config, datetime_string)
-      //  println "Preview of model that will be used for inference: "
-     //   ch_model_to_infer_config.view()
+        ch_model_to_infer_config.view()
     } else {
-        if (!params.exp_name) {
-            base = "$PWD/${params.output_dir}/Modelling/output/models"
+        def trainDir = new File("${params.output_dir}/Modelling/output/models/${params.exp_name}/config/")  
+        def ymlFiles = trainDir.listFiles(new FilenameFilter() {
+            public boolean accept(File dir, String name) {
+            return name.toLowerCase().endsWith(".yml")
+            }
+        })
+        if (ymlFiles == null || ymlFiles.length == 0) {
+            // Simply continue if the directory does not exist
+            println("No training Directory, continuing...")
+        } else {
+            if (!params.exp_name) {
+            base = "${params.output_dir}/Modelling/output/models"
             expName = findMostRecentFile(base)
             ch_model_to_infer_config = expName.map { mostRecentFile ->
-                 def fullPath_yml = "${base}/${mostRecentFile.trim()}/config/model_config.yml"
+                 def fullPath_yml = "${base}/${mostRecentFile.trim()}/config/*.yml"
                  return fullPath_yml
              }
             ch_train_model_json =  expName.map { mostRecentFile ->
-                 def fullPath_json = "${base}/${mostRecentFile.trim()}/model/model.json"
+                 def fullPath_json = "${base}/${mostRecentFile.trim()}/model/*.json"
                  return fullPath_json
              }
-         //   println "Preview of model that will be used for inference in case of using latest experiment:"
-       //     ch_model_to_infer_config.view()
-        } else {
-            println "Train step is disabled."
-            expName = params.exp_name
-            ch_model_to_infer_config = Channel.fromPath("$PWD/${params.output_dir}/Modelling/output/models/${params.exp_name}/config/model_config.yml", checkIfExists: true)
-            ch_train_model_json = Channel.fromPath("$PWD/${params.output_dir}/Modelling/output/models/${params.exp_name}/model/model.json", checkIfExists: true)
-          //  println "Preview of model config that will be used from Training: "
-        //    ch_model_to_infer_config.view()
+            ch_model_to_infer_config.view()
+            } else {
+                expName = params.exp_name
+                ch_model_to_infer_config = Channel.fromPath("${params.output_dir}/Modelling/output/models/${params.exp_name}/config/model_config.yml", checkIfExists: true)
+                ch_train_model_json = Channel.fromPath("${params.output_dir}/Modelling/output/models/${params.exp_name}/model/model.json", checkIfExists: true)
+                ch_model_to_infer_config.view()
+            }
         }
     }
 
@@ -177,20 +195,25 @@ workflow {
     //    println "Preview of analysis config that will be used for Inferring data: "
       //  ch_config_for_analysis.view()
     } else {
-        ch_config_for_analysis = Channel.fromPath("$PWD/${params.output_dir}/configs/analysis/xgboost_analysis_config.yml", checkIfExists: true)
-        ch_infer_csv = Channel.fromPath("$PWD/${params.output_dir}/Modelling/data/predicted/*.csv", checkIfExists: true)
-        println "Inference from data not performed"
-  //      println "Preview of analysis config that will be used for Inferring data: "
-//        ch_config_for_analysis.view()
+//        ch_config_for_analysis = Channel.fromPath("$PWD/${params.output_dir}/configs/analysis/xgboost_analysis_config.yml", checkIfExists: true)
+  //      ch_infer_csv = Channel.fromPath("$PWD/${params.output_dir}/Modelling/data/predicted/*.csv", checkIfExists: true)
+    //    println "Inference from data not performed"
+          def predictedDir = new File("${params.output_dir}/Modelling/data/predicted")
+          if (predictedDir.isEmpty()) {
+            // Simply continue if the directory does not exist
+            println("Directory ${params.output_dir}/Modelling/data/predicted does not exist, continuing...")
+          } else {
+            ch_config_for_analysis = Channel.fromPath("${params.output_dir}/configs/analysis/xgboost_analysis_config.yml", checkIfExists: true)
+            ch_infer_csv = Channel.fromPath("${params.output_dir}/Modelling/data/predicted/*.csv", checkIfExists: true)
+            ch_config_for_analysis.view()
+            print("Inference from data not performed")
+          }
     }
 
     // analyze data
     if (params.analyze == true) {
-        println "Analysis is enabled."
         if (!params.exp_name && params.preprocess_datasets == true) {
-            println "Experiment name is not provided and preprocessing datasets is enabled."
             if  (expName == null || expName.isEmpty()) {
-                println "Experiment name is null or empty."
                 // Collect the datetime from the channel
                 datetime_string
                     .map { it.trim() }
@@ -202,8 +225,8 @@ workflow {
                 }
                 println "Experiment name is empty ${ch_exp_name.view()}"               
                 // Use the extracted value in the analysis
-          //      println "Preview of config being used for analysis : ${ch_config_for_analysis.view()}"
                 analyze_dataset(ch_config_for_analysis, ch_exp_name.view(), ch_infer_csv.view(), datetime_string, params.output_dir)
+
             } else {
                 println "Experiment name is not empty. Using most recent experiment."
                 ch_exp_name = expName.map { mostRecentFile ->
@@ -216,8 +239,6 @@ workflow {
             }
         } else {
             println "Using given experiment : ${params.exp_name}"
-        //    println "Preview of config being used for analysis : ${ch_config_for_analysis.view()}"
-        //    println "Preview of config being used for analysis : ${ch_infer_csv.view()}"
             analyze_dataset(ch_config_for_analysis, params.exp_name, ch_infer_csv.view(), datetime_string, params.output_dir)
             }
     } else {
