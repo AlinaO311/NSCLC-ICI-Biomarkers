@@ -10,12 +10,21 @@ from analyzer import Analyzer
 cwd=os.getcwd().split('work', 1)[0]
 
 def main(analysis_config: Path, experiment_dir: Path, dir: Path, data_path: Optional[Path] = None) -> None:
-    pathlist = os.path.dirname(data_path).split('/')[:-2]
-    pathlist = ['/' if x == '' else x for x in pathlist]
-    print('analyze path: ', *pathlist[:-1])
+   # pathlist = os.path.dirname(data_path).split('/')[:-2]
+   # pathlist = ['/' if x == '' else x for x in pathlist]
+    if os.path.exists(experiment_dir):
+        pathlist = os.path.dirname(experiment_dir).split('/')[:-2]
+        pathlist = ['/' if x == '' else x for x in pathlist]
+        model_path = os.path.join(*pathlist[:-1], "output" , "models")
+        model_config_path = experiment_dir
+    else:
+        pathlist = os.path.dirname(data_path).split('/')[:-2]
+        pathlist = ['/' if x == '' else x for x in pathlist]
+        model_path = os.path.join(*pathlist,  "output" , "models", experiment_dir ,  "model/model.json")
+        model_config_path = os.path.join(*pathlist,  "output" , "models", experiment_dir, "config/model_config.yml")  # config file from exp_name
     output_path = os.path.join(*pathlist[:-1], dir ,"Modelling/output" ,"analysis" )
-    model_path = os.path.join(*pathlist[:-1], dir, "Modelling/output" , "models", experiment_dir, "model/model.json") # json file from exp_name
-    model_config_path = os.path.join(*pathlist[:-1] , dir ,"Modelling/output" , "models", experiment_dir, "config/model_config.yml")  # config file from exp_name
+#    model_path = os.path.join(*pathlist[:-1], dir, "Modelling/output" , "models", experiment_dir, "model/model.json") # json file from exp_name
+ #   model_config_path = os.path.join(*pathlist[:-1] , dir ,"Modelling/output" , "models", experiment_dir, "config/model_config.yml")  # config file from exp_name
     print('model_config_path ', model_config_path)
     print('model_path', model_path)
     analyser = Analyzer(
