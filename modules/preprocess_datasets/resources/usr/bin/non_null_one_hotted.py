@@ -41,7 +41,7 @@ def nn_process(config: dict, df: pd.DataFrame, *args) -> Tuple[pd.DataFrame, pd.
         df,
         columns=catCols,
         prefix=catCols,
-        drop_first=True,
+        drop_first=False,
     )
 
     print("\n---Summarising data after creating dummy variables.---")
