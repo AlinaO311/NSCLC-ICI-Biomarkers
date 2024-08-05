@@ -5,14 +5,15 @@ import argparse
 import os
 import json
 import glob
+import pandas as pd
 import ruamel.yaml
 from ruamel.yaml.scalarstring import SingleQuotedScalarString, DoubleQuotedScalarString
+from datetime import datetime
 from pathlib import Path
 from utils import read_config
 
 set_datetime = os.getenv('DATE_VALUE')
 cwd=os.getcwd().split('work', 1)[0]
-
 
 if __name__ == "__main__":
     # Parse command line arguments.
@@ -24,29 +25,33 @@ if __name__ == "__main__":
         "--config_path",
         required=True,
         type=Path,
-        default=Path(os.path.join(cwd, "${params.output_dir}", "configs/models/*.yml")),
+        default=Path(os.path.join(cwd, "${params.output_dir}", "configs/model/*.yml")),
         help="Path to preprocess config file.",
     )
     parser.add_argument('--output_file', help='name of output file',required=False)
+    parser.add_argument("--outdir", type=Path, help="Path to the output folder." )
 
     args = parser.parse_args()
     config_to_load = read_config(args.config_path)
     train_name = config_to_load['training_name']
     time_val = set_datetime.strip()
 
-    latest_file = os.path.join(cwd, "${params.output_dir}" ,'Modelling','data','predicted', train_name+'_prediction_inference.csv')
-
-    yaml = ruamel.yaml.YAML()
+    latest_file = os.path.join(os.getcwd(), train_name+'_prediction_inference.csv')
+    # Read the tab-separated file
+    df = pd.read_csv(latest_file, sep=',')
+   
+    yaml = ruamel.yaml.YAML() 
 
     if train_name == "xgboost_model":
-        yml_dict = """\
+        if df.select_dtypes(include=['object', 'category']).empty:
+            yml_dict = """\
             # List of confusion matrices to plot.
             confusion_matrix: [
                 {
                 output_name: "confusion_matrix",
-                ground_truth_col: "PFS_STATUS",
+                ground_truth_col: "DURABLE_CLINICAL_BENEFIT",
                 prediction_col: "predicted" 
-                }      
+                }
             ]
             # List of histograms to plot. Any nan values will be dropped.
             histogram: [
@@ -55,46 +60,115 @@ if __name__ == "__main__":
                 column: "AGE",
                 type: "continuous",
                 plotargs: {
-                    bins: 30,
-                    title: "Diagnosis Age"
+                bins: 30,
+                title: "Diagnosis Age"
                 }
             },
             {
-            output_name: "smoking_histogram",
-            column: "SMOKING_HISTORY",
-            type: "categorical",
+            output_name: "drug_administration_weeks_histogram",
+            column: "ADMINISTRATION_OF_DRUG_WEEKS",
+            type: "continuous",
             plotargs: {
-                title: "Smoking history",
-                xtick_label_rotation: 45,
+                title: "Administration of Drug Weeks"
             }
             }
             ]
-        # List of scatterplots to plot. Any nan values will be dropped.
+            # List of scatterplots to plot. Any nan values will be dropped.
             scatter_plot: [
                 {
-                output_name: "age_vs_smoking_history_scatter_plot",
+                output_name: "age_vs_smoking_history__scatter_plot",
                 x_column: "AGE",
-                y_column: "SMOKING_HISTORY",
+                y_column(s): ,
                 color_column: "predicted"
                 },
             {
-            output_name: "MSI_vs_TMB_norm_log2_scatter_plot",
-            x_column: "MSI",
+            output_name: "PDL1_EXP_vs_TMB_norm_log2_scatter_plot",
+            x_column: "PDL1_EXP", # for now changed to PDL1_EXP from MSI (what is MSI from ?)
             y_column: "TMB_norm_log2",
-            color_column: "PFS_STATUS"
+            color_column: "DURABLE_CLINICAL_BENEFIT"
             },
             {
             output_name: "Diagnosis_Age_vs_TMB_norm_log2_scatter_plot",
             x_column: "AGE",
             y_column: "TMB_norm_log2",
-            color_column: "PFS_STATUS",
-            prediction_data_path:
+            color_column: "DURABLE_CLINICAL_BENEFIT",
+            prediction_data_path: 
             }
-        ]
-        """
+            ]
+            """
+            print("No categorical columns found.")
+            smoking_columns = [col for col in df.columns if 'SMOKING' in col]
+            print(smoking_columns)
+            yaml.preserve_quotes = True
+            yaml.explicit_start = True
+            yaml_dump = yaml.load(yml_dict)
+            yaml_dump['scatter_plot'][-1]['columns'] = smoking_columns
+        else:
+            # Identify categorical columns
+            categorical_columns = df.select_dtypes(include=['object', 'category']).columns.tolist()
+            # Filter columns containing the string 'SMOKING'
+            smoking_columns = [col for col in df.columns if 'SMOKING' in col]
+            print(smoking_columns)
+            yml_dict = """\
+            # List of confusion matrices to plot.
+            confusion_matrix: [
+                {
+                output_name: "confusion_matrix",
+                ground_truth_col: "DURABLE_CLINICAL_BENEFIT",
+                prediction_col: "predicted" 
+                }
+            ]
+            # List of histograms to plot. Any nan values will be dropped.
+            histogram: [
+                {
+                output_name: "age_histogram",
+                column: "AGE",
+                type: "continuous",
+                plotargs: {
+                bins: 30,
+                title: "Diagnosis Age"
+                }
+            }
+            ]
+            # stacked bar plot for one-hot encoded data
+            stacked_bar_plot: [
+            {   
+                output_name: "smoking_history_stacked_bar_plot",
+                columns: ,
+                title: "Smoking History"
+                }
+            ]
+            # List of scatterplots to plot. Any nan values will be dropped.
+            scatter_plot: [
+                {
+                output_name: "age_vs_smoking_history__scatter_plot",
+                x_column: "AGE",
+                y_column: "SMOKING_HISTORY",
+                color_column: "predicted"
+                },
+            {
+            output_name: "PDL1_EXP_vs_TMB_norm_log2_scatter_plot",
+            x_column: "PDL1_EXP", # for now changed to PDL1_EXP from MSI (what is MSI from ?)
+            y_column: "TMB_norm_log2",
+            color_column: "DURABLE_CLINICAL_BENEFIT"
+            },
+            {
+            output_name: "Diagnosis_Age_vs_TMB_norm_log2_scatter_plot",
+            x_column: "AGE",
+            y_column: "TMB_norm_log2",
+            color_column: "DURABLE_CLINICAL_BENEFIT",
+            prediction_data_path: 
+            }
+            ]
+            """
+            yaml.preserve_quotes = True
+            yaml.explicit_start = True
+            yaml_dump = yaml.load(yml_dict)
+            yaml_dump['stacked_bar_plot'][-1]['columns'] = smoking_columns
         yaml.preserve_quotes = True
         yaml.explicit_start = True
         yaml_dump = yaml.load(yml_dict)
+        yaml_dump['scatter_plot'][-1]['prediction_data_path'] = latest_file  # Ensure correct placement
         def format_lists_in_block_style_if_colon_found(val):
             """Convert all lists with a ':' in them to block style."""
             if isinstance(val, list):
@@ -112,7 +186,6 @@ if __name__ == "__main__":
                 for k in val:
                     val[k] = format_lists_in_block_style_if_colon_found(val[k])
             return val
-        yaml_dump['prediction_data_path'] = latest_file
         yaml_dump = format_lists_in_block_style_if_colon_found(yaml_dump)
         with open("xgboost_analysis_config.yml", 'w') as f:
              yaml.dump(yaml_dump, f)
@@ -128,7 +201,7 @@ if __name__ == "__main__":
         confusion_matrix: [
             {
         output_name: "confusion_matrix",
-        ground_truth_col: "Treatment_Outcome",
+        ground_truth_col: "PFS_STATUS",
         prediction_col: "predicted" 
         }
     ]
@@ -136,7 +209,7 @@ if __name__ == "__main__":
         histogram: [
         {
         output_name: "age_histogram",
-        column: "Diagnosis_Age",
+        column: "AGE",
         type: "continuous",
         plotargs: {
             bins: 30,
@@ -148,7 +221,7 @@ if __name__ == "__main__":
     scatter_plot: [
     {
         output_name: "Diagnosis_Age_vs_TMB_norm_log2__scatter_plot",
-        x_column: "Diagnosis_Age",
+        x_column: "AGE",
         y_column: "TMB_norm_log2",
         color_column: "Treatment_Outcome"
     }
@@ -178,4 +251,5 @@ if __name__ == "__main__":
         yaml_dump = yaml.load(yml_dict)
         with open("keras_analysis_config.yml", 'w') as f:
             yaml.dump(yml_dict, f)
+
 

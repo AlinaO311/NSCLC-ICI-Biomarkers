@@ -27,30 +27,13 @@ def nn_process(config: dict, df: pd.DataFrame, *args) -> Tuple[pd.DataFrame, pd.
         df = df.drop(columns=args.remove_cols, axis=1, inplace=False)
     else:
         pass
-    df = df[df['PFS_STATUS'].notna()]
-    map = {
-    '0': 0 ,
-    '1': 1}
-    for k, v in map.items():
-        df.loc[df['PFS_STATUS'].str.startswith(k, na=False), 'PFS_STATUS'] = v
-    print(set(df['PFS_STATUS']))
 
-    #Instead of Drop nan values, replace 
-    def fill_na(data):
-        for col in data.columns:
-            if data[col].isna().any():
-                if data[col].dtype == "O":  # Object type (categorical)
-                    data[col] = data[col].fillna('Missing')
-                else:  # Numeric type
-                    data[col] = data[col].fillna(-1)
-        return data
-    
-    # Fill NaN values
-    df = fill_na(df)
-    df = df.drop(columns=['SAMPLE_ID', 'PATIENT_ID'])
+    df = df[df['DURABLE_CLINICAL_BENEFIT'].notna()]
+
+    df = df.drop(columns=['SAMPLE_ID', 'PATIENT_ID','STUDY_NAME'])
     df.info(memory_usage=False) # Prints info.
 
-    catCols = [col for col in df.columns if df[col].dtype=="O" and 'PFS_STATUS' not in col]
+    catCols = [col for col in df.columns if df[col].dtype=="O" and 'DURABLE_CLINICAL_BENEFIT' not in col]
 
     # Create dummy variables (one hot encoding).
     print("\n\n---Creating dummy (one hot encoded) variables.---")
@@ -58,7 +41,7 @@ def nn_process(config: dict, df: pd.DataFrame, *args) -> Tuple[pd.DataFrame, pd.
         df,
         columns=catCols,
         prefix=catCols,
-        drop_first=True,
+        drop_first=False,
     )
 
     print("\n---Summarising data after creating dummy variables.---")

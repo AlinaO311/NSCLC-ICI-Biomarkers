@@ -9,6 +9,7 @@ dependencies:
   - numpy==1.22.4
   - pandas==1.4.2
   - libstdcxx-ng
+  - chardet=5.2.0
   - pip
   - pip:
     - cycler==0.11.0
@@ -24,8 +25,7 @@ dependencies:
     - python-Levenshtein==0.23.0 
     - rapidfuzz==3.5.2
     - nf-core
-    - dask[complete] 
-    - dask-ml
+    - nltk==3.8.1
     - scikit-learn==1.1.1
     - scipy==1.8.1
     - ruamel.yaml<=0.18.0

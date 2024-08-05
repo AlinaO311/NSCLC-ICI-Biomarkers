@@ -5,7 +5,7 @@ import itertools
 import random
 from textwrap import wrap
 from typing import Any, Dict, List, Optional, Union
-
+import os
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -19,6 +19,56 @@ from sklearn.manifold import TSNE
 PLT_COLORS_BASE = list(dict(mcolors.BASE_COLORS).keys())
 PLT_COLORS_CSS4 = list(dict(mcolors.CSS4_COLORS).keys())
 PLT_TABLEU_COLORS = list(dict(mcolors.TABLEAU_COLORS).keys())
+
+def _confusion_matrix(
+    predicted_labels: np.ndarray,
+    ground_truth_labels: np.ndarray,
+    class_labels: Optional[List[str]] = None,
+    normalize: bool = False,
+    x_label: str = "Prediction",
+    y_label: str = "Ground Truth",
+    imshow_kwargs: Dict[str, Any] = {},
+    save_path: Optional[str] = None,
+    output_name: Optional[str] = None
+):
+    """Creates and plots a confusion matrix given ground truth and prediction values.
+
+    Arguments:
+        predicted_labels -- The predicted values from the model.
+        ground_truth_labels -- The ground truth values.
+
+    Keyword Arguments:
+        class_labels -- The names of the labels (default: {None})
+        normalize -- If the presented values should be ratios. (default: {False})
+        x_label -- The x-axis plot label. (default: {"Prediction"})
+        y_label -- The y-axis plot label. (default: {"Ground Truth"})
+        imshow_kwargs -- Any additional arguments to configure the plot. (default: {{}})
+        save_path -- Path to save the plot (default: {None})
+        output_name -- Name of the output file (default: {None})
+    """
+    fig, ax = plt.subplots()
+    confusion_matrix = sklearn.metrics.confusion_matrix(ground_truth_labels, predicted_labels)
+
+    if normalize:
+        confusion_matrix = confusion_matrix.astype('float') / confusion_matrix.sum(axis=1)[:, np.newaxis]
+        confusion_matrix = np.nan_to_num(confusion_matrix, copy=True)
+
+    ax.imshow(confusion_matrix, cmap="Oranges", **imshow_kwargs)
+
+    if class_labels is None:
+        class_labels = [str(i) for i in range(confusion_matrix.shape[0])]
+
+    tick_marks = np.arange(len(class_labels))
+    ax.set_xlabel(x_label)
+    ax.set_xticks(tick_marks)
+    ax.set_xticklabels(class_labels, rotation=-90)
+    ax.set_ylabel(y_label)
+    ax.set_yticks(tick_marks)
+    ax.set_yticklabels(class_labels)
+
+    for i, j in itertools.product(range(confusion_matrix.shape[0]), range(confusion_matrix.shape[1])):
+        ax.text(j, i, format(confusion_matrix[i, j], '.2f' if normalize else 'd'),
+                horizontalalignment="center", color="black")
 
 
 def scatter_plot(
@@ -62,118 +112,33 @@ def scatter_plot(
     ax.legend()
 
 
-def confusion_matrix(
-    predicted_labels: np.ndarray,
-    ground_truth_labels: np.ndarray,
-    class_labels: Optional[List[str]] = None,
-    normalize: bool = False,
-    x_label: str = "Prediction",
-    y_label: str = "Ground Truth",
-    ax: Optional[plt.Axes] = None,
-    imshow_kwargs: Dict[str, Any] = {},
-):
-    """Creates a confusion matrix given a ground truth values and prediction values.
-
-    Arguments:
-        predicted_labels -- The predicted values from the model.
-        ground_truth_labels -- The ground truth values.
-
-    Keyword Arguments:
-        class_labels -- The names of the labels (default: {None})
-        normalize -- If the presented values should be ratios. (default: {False})
-        x_label -- The x-axis plot label. (default: {"Prediction"})
-        y_label -- The y-axis plot label. (default: {"Ground Truth"})
-        ax -- A matplotlib axis to plot on. (default: {None})
-        imshow_kwargs -- Any additional arguments to configure the plot. (default: {{}})
-    """
-    if ax is None:
-        fig = plt.figure(facecolor="w", edgecolor="k")
-        fig.tight_layout()
-        ax = fig.add_subplot(1, 1, 1)
-
-    n_classes = predicted_labels.shape[0]
-    confusion_matrix = sklearn.metrics.confusion_matrix(
-        ground_truth_labels,
-        predicted_labels,
-        labels=[i for i in range(n_classes)],
-    )
-    _confusion_matrix(
-        ax, confusion_matrix, class_labels, normalize, x_label, y_label, imshow_kwargs
-    )
-
-
-def _confusion_matrix(
-    ax: plt.Axes,
-    confusion_matrix: np.ndarray,  # array, shape = [n_classes, n_classes]
-    class_labels: Optional[List[str]] = None,
-    normalize: bool = False,
-    x_label: str = "Prediction",
-    y_label: str = "Ground Truth",
-    imshow_kwargs: Dict[str, Any] = {},
+def stacked_bar_plot(
+    df: pd.DataFrame,
+    category_column: Optional[str] = None, 
+    plotargs: Dict[str, Any] = {},
 ) -> None:
-    """Function to plot the supplied confusion matrix.
-
-    Other things to note:
-        - Depending on the number of category and the data, you may have to modify
-            the figsize, font sizes etc. to make the plot look good.
-        - Currently, some of the ticks dont line up due to rotations.
-
+    """Generates a stacked bar plot for one hot encoded variables.
     Arguments:
-        ax -- A matplotlib axis to plot on.
-        confusion_matrix -- The confusion matrix array with the shape [n_classes, n_classes]
-
-    Keyword Arguments:
-        class_labels -- The names of the labels (default: {None})
-        normalize -- If the presented values should be ratios. (default: {False})
-        x_label -- The x-axis plot label. (default: {"Prediction"})
-        y_label -- The y-axis plot label. (default: {"Ground Truth"})
-        imshow_kwargs -- Any additional arguments to configure the plot. (default: {{}})
+        df -- a data frame containing the values to plot
+        category_column -- The name of a column containing categories
+            for the plot color of each data point. (default: {None})
+   
+    Returns:
+        The resulting plot as a seaborn facet grid.
     """
-    if normalize:
-        confusion_matrix = (
-            confusion_matrix.astype("float")
-            * 10
-            / confusion_matrix.sum(axis=1)[:, np.newaxis]
-        )
-        confusion_matrix = np.nan_to_num(confusion_matrix, copy=True)
-        confusion_matrix = confusion_matrix.astype("int")
-
-    ax.imshow(confusion_matrix, cmap="Oranges", **imshow_kwargs)
-
-    # Parse effective labels.
-    if class_labels is None:
-        n_classes = confusion_matrix.shape[0]
-        class_labels = [str(i) for i in range(n_classes)]
-    class_labels = ["\n".join(wrap(l, 11)) for l in class_labels]
-
-    tick_marks = np.arange(len(class_labels))
-
-    ax.set_xlabel(x_label, fontsize=14)
-    ax.set_xticks(tick_marks)
-    ax.set_xticklabels(class_labels, rotation=-90, ha="center")
-    ax.xaxis.set_label_position("bottom")
-    ax.xaxis.tick_bottom()
-    ax.set_xlim(min(tick_marks) - 0.5, max(tick_marks) + 0.5)
-
-    ax.set_ylabel(y_label, fontsize=14)
-    ax.set_yticks(tick_marks)
-    ax.set_yticklabels(class_labels, va="center")
-    ax.yaxis.set_label_position("left")
-    ax.yaxis.tick_left()
-    ax.set_ylim(max(tick_marks) + 0.5, min(tick_marks) - 0.5)
-
-    for i, j in itertools.product(
-        range(confusion_matrix.shape[0]), range(confusion_matrix.shape[1])
-    ):
-        ax.text(
-            j,
-            i,
-            format(confusion_matrix[i, j], "d") if confusion_matrix[i, j] != 0 else ".",
-            horizontalalignment="center",
-            verticalalignment="center",
-            color="black",
-        )
-
+    fig = plt.figure(facecolor="w", edgecolor="k")
+    color_cycler = color_cycler_plt()
+    # Select only 'Category' columns
+    category_columns = df.filter(like=category_column).columns
+    category_df = df[category_columns]
+    # Sum the columns to get the frequency of each category
+    category_counts = category_df.sum()
+    # Create a bar plot
+    category_counts.plot(kind='bar', color=color_cycler)
+    plt.xlabel('Categories')
+    plt.ylabel('Frequency')
+    plt.title('Frequency of Each Category')
+    plt.show()
 
 def histogram(
     data: pd.Series,

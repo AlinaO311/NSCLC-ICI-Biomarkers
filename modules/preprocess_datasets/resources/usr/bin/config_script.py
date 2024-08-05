@@ -55,7 +55,7 @@ if __name__ == "__main__":
                         colsample_bytree: 0.6
                         }
                 preprocessed_data_path:
-                gt_column: "PFS_STATUS"
+                gt_column: "DURABLE_CLINICAL_BENEFIT"
         """
         yaml.preserve_quotes = True
         yaml.explicit_start = True
@@ -84,33 +84,40 @@ if __name__ == "__main__":
         with open("xgboost_model_config.yml", 'w') as f:
              yaml.dump(yaml_dump, f)
     else:
-        yml_dict = { 'training_name': "keras_feed_forward", # Training info
-                'random_seed': config_to_load['random_seed'], # sets seed for model initiation
-                'model': "keras_feed_forward" , # Model info
-                'args': {
-                        'nr_of_epochs': 130,
-                        'optimizer': "adam",
-                        'loss': "binary_crossentropy", 'metrics': ["accuracy", "mean_squared_error"], # Configure the model architecture.
-                        'layers': [ # Only dense layers are supported currently.
-                                  {
-                                    'type': "dense",
-                                    'size': 1,
-                                    'activation': "relu"},
-                                  {'type': "dense",
-                                   'size': 10,
-                                   'activation': "relu"},
-                                  {'type': "dense" ,
-                                   'size': 1,
-                                   'activation': "sigmoid"
-                                  }
-                                  ]
-                        }, # For binary classification the final layer must be size 1 with sigmoid activation.
-             'preprocessed_data_path': latest_file,
-             'gt_column': "PFS_STATUS" }
-        json_string = json.dumps(yml_dict)
-        data = yaml.load(json_string)
-        # the following sets flow-style for the root level mapping only
-        data.fa.set_block_style()
-        with open("keras_model_config.yml", 'w') as f:
-            yaml.dump(yml_dict, f)
-
+        yml_dict = """\
+            training_name: keras_feed_forward
+            random_seed: 
+            model: keras_feed_forward
+            args: {
+                nr_of_epochs: 130,
+                optimizer: adam,
+                loss: binary_crossentropy, 
+                metrics: [accuracy, mean_squared_error], 
+                layers: [ # Only dense layers are supported currently.
+                    {
+                        type: dense,
+                        size: 1,
+                        activation: relu
+                    },
+                    {
+                        type: dense,
+                        size: 10,
+                        activation: relu
+                    },
+                    {
+                        type: dense ,
+                        size: 1,
+                        activation: sigmoid
+                    }
+                ]
+            }, # For binary classification the final layer must be size 1 with sigmoid activation.
+            preprocessed_data_path: 
+            gt_column: "DURABLE_CLINICAL_BENEFIT"
+        """
+        yaml.preserve_quotes = True
+        yaml.explicit_start = True
+        yaml_dump = yaml.load(yml_dict)
+        yaml_dump['random_seed'] = config_to_load['random_seed']
+        yaml_dump['preprocessed_data_path'] = latest_file
+        with open("keras_feed_forward_config.yml", 'w') as f:
+            yaml.dump(yaml_dump, f)  	

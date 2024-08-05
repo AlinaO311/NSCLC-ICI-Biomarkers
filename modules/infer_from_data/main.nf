@@ -19,22 +19,23 @@ process infer_from_data {
     val data_path
     val infer_outfile 
     val datetime_string
+    val output_dir
 
     script:
     if (experiment_name == "")
       """
       DATE_VALUE='$datetime_string'
       export DATE_VALUE
-      PYTHONPATH=$baseDir/bin/src infer.py --experiment_folder ${config_file} --data_path ${data_path} --output_file $infer_outfile
-      PYTHONPATH=$baseDir/bin/src config_script.py --config_path $config_file --output_file $infer_outfile 
+      PYTHONPATH=$baseDir/bin/src infer.py --experiment_folder ${config_file} --data_path ${data_path} --output_file $infer_outfile --dir ${params.output_dir}
+      PYTHONPATH=$baseDir/bin/src config_script.py --config_path $config_file --output_file $infer_outfile --outdir ${params.output_dir}
       """
 
     else
       """
       DATE_VALUE='$datetime_string'
       export DATE_VALUE
-      PYTHONPATH=$baseDir/bin/src infer.py --experiment_folder ${params.exp_name} --data_path ${data_path} --output_file $infer_outfile
-      PYTHONPATH=$baseDir/bin/src config_script.py --config_path $config_file --output_file $infer_outfile 
+      PYTHONPATH=$baseDir/bin/src infer.py --experiment_folder ${params.exp_name} --data_path ${data_path} --output_file $infer_outfile --dir ${params.output_dir}
+      PYTHONPATH=$baseDir/bin/src config_script.py --config_path $config_file --output_file $infer_outfile --outdir ${params.output_dir}
       """
 
 }

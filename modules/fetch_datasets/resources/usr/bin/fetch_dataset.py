@@ -8,10 +8,13 @@ import ruamel.yaml
 import os
 import re
 import pandas as pd
+import numpy as np
 import glob
 import difflib
 #from datetime import datetime
 from itertools import chain
+import chardet
+
 
 path_list = []
 patientSets = {}
@@ -19,6 +22,77 @@ sampleSets = {}
 mutSets = {}
 file_inlist = ['data_clinical_patient.txt','data_clinical_sample.txt','data_mutations.txt']
 cwd=os.getcwd().split('work', 1)[0]
+
+def fill_na(data):
+    for col in data.columns:
+        if data[col].isna().any():
+            if data[col].dtype == "O":  # Object type (categorical)
+                data[col] = data[col].fillna('unknown')
+            else:  # Numeric type
+               data[col] = data[col].fillna(-1)
+    return data
+
+def normalize_text(s):
+    if isinstance(s, str):
+        # Convert to lowercase
+        s = s.lower()
+        # Replace non-alphanumeric characters with spaces
+        s = re.sub(r'[^a-z0-9\s]', ' ', s)
+        # Remove extra spaces
+        s = re.sub(r'\s+', ' ', s).strip()
+    return s
+
+def group_and_replace_phrases(phrases, threshold=0.2):
+    # Get unique phrases
+    unique_phrases = list(set(phrases))
+    groups = []
+    visited = set()
+    for idx, phrase in enumerate(unique_phrases):
+        if idx not in visited:
+            group = [phrase]
+            visited.add(idx)
+            for jdx, other_phrase in enumerate(unique_phrases):
+                if jdx != idx and jdx not in visited:
+                    # Check if either phrase is a substring of the other
+                    if phrase in other_phrase or other_phrase in phrase:
+                        group.append(other_phrase)
+                        visited.add(jdx)
+            groups.append(group)
+    # Further grouping similar phrases based on common words
+    final_groups = []
+    while groups:
+        group = groups.pop(0)
+        merged = False
+        for final_group in final_groups:
+            if any(p in group[0] or group[0] in p for p in final_group):
+                final_group.extend(group)
+                merged = True
+                break
+        if not merged:
+            final_groups.append(group)
+    # Removing duplicates within groups
+    final_groups = [list(set(group)) for group in final_groups]
+    phrase_replacement = {}
+    for group in final_groups:
+        representative = min(group, key=len)  # Choose the shortest phrase as the representative
+        for phrase in group:
+            phrase_replacement[phrase] = representative
+    return phrase_replacement
+
+def replace_phrases_in_column(df, column_name, phrase_replacement):
+    df[column_name] = df[column_name].apply(lambda x: phrase_replacement.get(normalize_text(x), x))
+    return df
+
+def log2_normalization(x):
+    # Find the minimum value in the series
+    min_value = x.min()
+    # If the minimum value is less than or equal to zero, calculate the shift required
+    shift = -min_value + 1 if min_value <= 0 else 0
+    # Apply the shift and then perform log2 normalization
+    return np.log2(x + shift + 1)
+
+def normalize(x):
+    return (x - x.mean()) / x.std()
 
 class FetchData(object):
     def __init__(self, dataSets, mutationLists):
@@ -32,17 +106,21 @@ class FetchData(object):
                    if entry in file_inlist:
                        path_list.append(os.path.join(cwd , 'Data', study , entry) )
         for file_path in path_list:
+            with open(file_path, 'rb') as f:
+                raw_data = f.read(10000)
+                result = chardet.detect(raw_data)
+                encoding = result['encoding']
             if 'patient' in file_path and os.path.isfile(file_path):
             # Read data files:
-                df = pd.read_csv(file_path, comment='#',header=0, delimiter='\t', low_memory=False)
+                df = pd.read_csv(file_path, comment='#',header=0, delimiter='\t', low_memory=False, encoding=encoding)
                 patientSets[file_path] = df
                 print("Successfully read: " + file_path)
             if 'sample' in file_path and  os.path.isfile(file_path):
-                df = pd.read_csv(file_path, comment='#',header=0, delimiter='\t', low_memory=False)
+                df = pd.read_csv(file_path, comment='#',header=0, delimiter='\t', low_memory=False, encoding=encoding)
                 sampleSets[file_path] = df
                 print("Successfully read: " + file_path)
             if 'mutations' in file_path and  os.path.isfile(file_path):
-                df = pd.read_csv(file_path, comment='#',header=0, delimiter='\t', low_memory=False)
+                df = pd.read_csv(file_path, comment='#',header=0, delimiter='\t', low_memory=False, encoding=encoding)
                 mutSets[file_path] = df
                 print("Successfully read: " + file_path)
         return patientSets, sampleSets, mutSets 
@@ -53,7 +131,7 @@ class FetchData(object):
         feature_read = feature_file.read() 
         # replacing end splitting the text when newline ('\n') is seen, remove empty str. 
         feat_list = list(filter(None, feature_read.split("\n") ))
-        C1,C2,C3 =[],[],[]
+        C1,C2 =[],[]
         colsList, ls = [],[]
         #get list of col names from patient and sample data
         for i in patientSets.values():
@@ -64,32 +142,67 @@ class FetchData(object):
                     colsList+=vals.columns.values.tolist()
         feat_list = [x.upper() for x in feat_list]
         colsList = [x.upper() for x in colsList]
-        for g in feat_list:
-            # for feature in list of desired features
-            for col in set(colsList):
-                # if the difference in ratios between matching blocks greater than .25
-                if difflib.SequenceMatcher(None, g, col).ratio() > 0.25:
-                    # check that either word in col starts with feature word OR difference ratio greater than 0.7
-                    # append feature, column value, and ratio to lists to create DF emp 
-                    if col.startswith(g) or difflib.SequenceMatcher(None, g, col).ratio() > 0.8:
-                        C1.append(g)
-                        C2.append(col)
-                        C3.append(difflib.SequenceMatcher(None, g, col).ratio())
-        emp = pd.DataFrame({'key': C1, 'val': C2, 'ratio': C3})
+        ##### First harmonize data columns
+        for df_name, df in patientSets.items():
+            # Create temporary lists to hold matching columns
+            df.columns = df.columns.str.upper()
+            tmp_list_dict = {g: [] for g in feat_list}
+            if any('DURABLE' in col for col in df.columns):
+            # Drop columns that contain the string 'RESPON' or 'fs_status'
+                df = df.drop(columns=[col for col in df.columns if 'RESPON' in col or 'FS_STATUS' in col])
+            else:
+                # Check if any column contains the string 'RESPON'
+                if any('RESPON' in col for col in df.columns):
+                    # Replace column names that contain 'RESPON'
+                    df.columns = [col.replace('RESPON', 'DURABLE_CLINICAL_BENEFIT') if 'RESPON' in col else col for col in df.columns]
+                    # Drop columns that contain the string 'RESPON' or 'FS_STATUS'
+                    df = df.drop(columns=[col for col in df.columns if 'RESPON' in col or 'FS_STATUS' in col])
+                else:
+                    # Check if any column contains the string 'FS_STATUS'
+                    if any('FS_STATUS' in col for col in df.columns):
+                        # Replace column names that contain 'FS_STATUS'
+                        df.columns = [col.replace('FS_STATUS', 'DURABLE_CLINICAL_BENEFIT') if 'FS_STATUS' in col else col for col in df.columns]
+                        # Drop columns that contain the string 'FS_STATUS'
+                        df = df.drop(columns=[col for col in df.columns if 'FS_STATUS' in col])
+                    else:
+                        # Return an error if neither 'RESPON' nor 'FS_STATUS' are found
+                        print("Error: Neither 'RESPON' nor 'FS_STATUS' found in columns")
+                        patientSets.pop(df_name) 
+           # Check each column in the data frame
+            for col in df.columns:
+                for g in feat_list:
+                    if 'STAGE' in g.upper() and 'STAGE' in col:
+                        tmp_list_dict[g].append(col)
+                    else:
+                        if g in col and 'STAGE' not in col.upper():
+                            tmp_list_dict[g].append(col)
+            # Extract the first item from each tmp_list and add to newList
+            for g, tmp_list in tmp_list_dict.items():
+                if tmp_list:  # Only add if the list is not empty
+                    C1.append(g)
+                    C2.append(tmp_list[0])
+        emp = pd.DataFrame({'key': C1, 'val': C2})
         #keep the col value that has the max ratio if it occurs more than 1 time
-        f = emp.groupby('val', group_keys=False).apply(lambda x: x.loc[x.ratio.idxmax()])
+        f = emp.apply(lambda x: x.astype(str).str.upper()).drop_duplicates(subset=['key', 'val'], keep='first')
         # create dict from feature:col value pair to rename data cols
         result = f.groupby('key')['val'].apply(list).to_dict()
-        for v in result.values():
-            for feat in v:
-                if 'NONSYNONYMOUS' in feat:
-                    result['TMB'].append(feat)
-                    break
         #rename some dict keys
         result['SMOKING_HISTORY'] = result.pop('SMOK')
-        keep_cols = [key for key, val in result.items() if 'NONSYNONYMOUS' not in key]
+        # add if statement for TMB and HGVSP
+        if 'TMB' in feat_list:
+            result['TMB']=['TMB']
+            for s in colsList:
+                if s.startswith('TMB') or s.endswith('TMB'):
+                    result['TMB'].append(s)
+        else:
+            pass
+        keep_cols = [key for key, val in result.items()]
+        #rename some dict keys
+        if 'HGVSP' in feat_list:
+            keep_cols+=['HGVSP']
+        else:
+            pass
         keep_cols+=['STUDY_NAME']
-        keep_cols+=['HGVSP']
         def change_names(torename, def_dict):
             #change names of columns within dictionaries to match keys created from features
             col_map = {col:key for key, cols in def_dict.items() for col in cols}
@@ -115,13 +228,18 @@ class FetchData(object):
         change_names(patientSets, result)
         change_names(sampleSets, result)
         change_names(mutSets, result)
-        all_clinical_data = concatinate_dfs(patientSets, keep_cols)
+        ## create unique list from above cols and the feat_list
+        keep_feats = list(set(keep_cols + feat_list))
+        keep_feats = [s.strip() for s in keep_feats]
+        keep_feats.sort(key=len, reverse=True)  # Sort by length in descending order        
+        all_clinical_data = concatinate_dfs(patientSets, keep_feats)
         all_clinical_data.rename(columns=lambda x: x.strip(), inplace=True)
         # Sample data:  
-        all_sample_data = concatinate_dfs(sampleSets, keep_cols)
+        all_sample_data = concatinate_dfs(sampleSets, keep_feats)
         all_sample_data.rename(columns=lambda x: x.strip(), inplace=True)
-        all_mut_data = concatinate_dfs(mutSets, keep_cols)
+        all_mut_data = concatinate_dfs(mutSets, keep_feats)
         all_mut_data.rename(columns=lambda x: x.strip(), inplace=True)
+        # load mutation collumns
         mut_file = open(os.path.join(cwd , self.mutations), "r")
         mut_list = mut_file.read().translate({ord(c): None for c in "[]'"}).split(',')
         targets = [word for word in mut_list if '=' in word]
@@ -132,28 +250,107 @@ class FetchData(object):
         m_lst = [ ele for ele in [l.split(',') for l in ','.join(mut_list).split('\n')] if ele != ['']]
         # replace string before = in each element within each list and strip whitespace
         muts = [[re.sub('\w+[=]+', '', y).strip() for y in x] for x in m_lst]
-        # create concat column from HUGO_SYMBOL and HGVSP (protein mod/consequence)
-        all_mut_data['MUT_HGVSP'] = all_mut_data['HUGO_SYMBOL']+'_'+all_mut_data['HGVSP']
-        # Count the occurrence of each Mut/consequence for each Sample_ID
-        mutDF = pd.crosstab( all_mut_data['TUMOR_SAMPLE_BARCODE'], all_mut_data['MUT_HGVSP'], dropna=False).astype(int)
+        # check if HGVSP is in feature list
+        if 'HGVSP' in keep_feats:
+            # create concat column from HUGO_SYMBOL and HGVSP (protein mod/consequence)
+            all_mut_data['MUT_HGVSP'] = all_mut_data['HUGO_SYMBOL']+'_'+all_mut_data['HGVSP']
+            # Count the occurrence of each Mut/consequence for each Sample_ID
+            mutDF = pd.crosstab( all_mut_data['TUMOR_SAMPLE_BARCODE'], all_mut_data['MUT_HGVSP'], dropna=False).astype(int)
+            all_mut_data.drop(['HUGO_SYMBOL','MUT_HGVSP','HGVSP'], axis=1, inplace=True)
+        elif 'CONSEQUENCE'  in keep_feats:
+            all_mut_data['MUT_CONSEQUENCE'] = all_mut_data['HUGO_SYMBOL']+'_'+all_mut_data['CONSEQUENCE']
+            # Count the occurrence of each Mut/consequence for each Sample_ID
+            mutDF = pd.crosstab( all_mut_data['TUMOR_SAMPLE_BARCODE'], all_mut_data['MUT_CONSEQUENCE'], dropna=False).astype(int)
+            all_mut_data.drop(['HUGO_SYMBOL','MUT_CONSEQUENCE','CONSEQUENCE'], axis=1, inplace=True)
+        else:
+            mutDF = pd.crosstab( all_mut_data['TUMOR_SAMPLE_BARCODE'], all_mut_data['HUGO_SYMBOL'], dropna=False).astype(int)
+            all_mut_data.drop('HUGO_SYMBOL', axis=1, inplace=True)
         # if count is greater than 2 set to 1, else 0
         mutDF.iloc[:,1:] = mutDF.iloc[:,1:].applymap(lambda x: x if x >= 1 else 0)
         mutDF = mutDF.loc[:, pd.notnull(mutDF.columns)]
         length=len(names)
         for name in range(length):
-            # sum across rows where col matches any of mutations in list muts
-            mutDF[names[name]] = mutDF.loc[:, mutDF.columns.str.startswith(tuple(muts[name]))].sum(1)
+             # sum across rows where col matches any of mutations in list muts
+            matching_columns = [col for col in mutDF.columns if any(m in col for m in muts[name])]
+            mutDF[names[name]] = mutDF.filter(items=matching_columns).sum(1)
         mutDF['TUMOR_SAMPLE_BARCODE'] = mutDF.index
         mutDF.index.name = None
         mutationMerged_dict = all_sample_data.merge(mutDF.rename(columns={'TUMOR_SAMPLE_BARCODE': 'SAMPLE_ID'}), 'left')
         unique_values = list(set(chain(*muts)))+names  # Get unique values from flattened list
         getCols = [cols for cols in mutationMerged_dict if any(str(cols).startswith(val) for val in unique_values)]
-        #[cols for cols in mutationMerged_dict for col in list(set(chain(*muts)))+names if col == cols]
-        mutationMerged_dict = mutationMerged_dict.loc[:,['PATIENT_ID','SAMPLE_ID']].join(mutationMerged_dict.loc[:,getCols].fillna(0).astype(int))
+        #### get columns that are that match the feature list and mutation list
+        existing_columns_to_keep = [col for col in getCols+keep_feats if col in mutationMerged_dict]
+        ## subset mutation df to existing columns to keep 
+        subset_df = mutationMerged_dict[existing_columns_to_keep]
+        # drop columns that are not in the feature list in order to fill mut cols with na with 0 
+        subset_df = subset_df.drop(columns=getCols)
+        mutationMerged =subset_df.join(mutationMerged_dict.loc[:,getCols].fillna(0).astype(int))
+        ##### Harmonize df values
+        if 'TMB' in keep_feats:
+            if (mutationMerged_dict['TMB'].dtype != 'float64' and mutationMerged_dict['TMB'].dtype != 'int64') and mutationMerged_dict['TMB'].astype(str).str.contains(',').any():
+                # Ensure all values are strings before using .str accessor
+                mutationMerged_dict['TMB'] = mutationMerged_dict['TMB'].astype(str)
+                # Replace commas with periods
+                mutationMerged_dict['TMB'] = mutationMerged_dict['TMB'].str.replace(',', '.')
+            else:
+                pass
+            mutationMerged_dict['TMB'] = pd.to_numeric(mutationMerged_dict['TMB'], errors='coerce').fillna(0).astype(float)
+            mutationMerged_dict['TMB_norm'] = mutationMerged_dict.groupby('STUDY_NAME')['TMB'].transform(normalize)
+            mutationMerged_dict['TMB_norm_log2'] = mutationMerged_dict.groupby('STUDY_NAME')['TMB'].transform(log2_normalization)
+            mutationMerged_dict = mutationMerged_dict.loc[:,['PATIENT_ID','SAMPLE_ID','TMB']].join(mutationMerged_dict.loc[:,getCols].fillna(0).astype(int))
+        else:
+            mutationMerged_dict = mutationMerged_dict.loc[:,-getCols].join(mutationMerged_dict.loc[:,getCols].fillna(0).astype(int))
         # Combine all data:
-        patient_sample_data = pd.merge(all_clinical_data, mutationMerged_dict.merge(all_mut_data.rename(columns={'TUMOR_SAMPLE_BARCODE': 'SAMPLE_ID'}), 'left') , on=['PATIENT_ID','STUDY_NAME'], how='left')
-        patient_sample_data = patient_sample_data.drop(['HUGO_SYMBOL','HGVSP','MUT_HGVSP'], axis=1)
-        return patient_sample_data
+        patient_sample_data = pd.merge(all_clinical_data, mutationMerged.merge(all_mut_data.rename(columns={'TUMOR_SAMPLE_BARCODE': 'SAMPLE_ID'}), 'left') , on=['PATIENT_ID','STUDY_NAME'], how='left')
+        ### remove data that is more than 50% missing
+        threshold = len(patient_sample_data.columns) / 2
+        patient_sample_data.dropna(thresh=threshold, inplace=True)
+        df=fill_na(patient_sample_data) 
+        ### fill object cols with Missing add -1 to numeric cols
+        ### fix Durable clinical benefit entries
+        def map_values(val):
+            if val == 0:
+                return 0
+            if val == 1:
+                return 1
+            if val.startswith('N'):
+                return 0
+            else:
+                return 1
+        df['DURABLE_CLINICAL_BENEFIT'] = df['DURABLE_CLINICAL_BENEFIT'].apply(map_values)
+        repl_df = df.copy()
+        # Process each string column
+        for column in df.select_dtypes(include=['object']).columns:
+            if column not in ['PATIENT_ID', 'SAMPLE_ID', 'STUDY_NAME']:
+                new_values = []   
+                for value in df[column]:
+                    print(value)
+                    try:
+                        # Convert to float first to handle numeric strings and floats
+                        num = float(value)
+                        # Convert float to int for comparison
+                        num = int(num)
+                        if num <= 1:
+                            new_values.append('negative')
+                        elif num < 49:
+                            new_values.append('weak')
+                        elif num > 50:
+                            new_values.append('strong')
+                        else:
+                            new_values.append(value)
+                    except (ValueError, TypeError):
+                        new_values.append(value)
+                # Assign the new values back to the column
+                df[column] = new_values
+                print(set(df[column].tolist()))
+                # Extract all words from the column
+                all_phrases = df[column].tolist()
+                normalized_phrases = [normalize_text(s) for s in all_phrases]
+                # Group and replace phrases
+                phrase_replacement = group_and_replace_phrases(normalized_phrases)
+                # Replace phrases in the DataFrame
+                replace_phrases_in_column(repl_df, column, phrase_replacement)
+        return repl_df
 
 def Harmonize(self, *args):
     print("Getting Datasets...")
