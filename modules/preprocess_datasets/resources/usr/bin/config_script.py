@@ -51,7 +51,9 @@ if __name__ == "__main__":
                         eta: 0.3,
                         tree_method: hist,
                         enable_categorical: True,
-                        subsample: 0.8,  
+                        subsample: 0.8,
+                        alpha: 0.01,
+                        lambda: 0.1,
                         colsample_bytree: 0.6
                         }
                 preprocessed_data_path:
