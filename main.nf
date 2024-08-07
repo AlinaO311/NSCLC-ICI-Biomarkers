@@ -207,7 +207,7 @@ workflow {
             return name.toLowerCase().endsWith(".csv")
             }
 	    })
-        if (ymlFiles == null || ymlFiles.length == 0) {
+        if (csvFiles == null || csvFiles.length == 0) {
             // Simply continue if the directory does not exist
             println("Directory ${params.output_dir}/Modelling/data/predicted does not exist, continuing...")
         } else {
