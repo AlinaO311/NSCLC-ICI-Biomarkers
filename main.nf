@@ -188,26 +188,34 @@ workflow {
     // predict data 
     // 1 ) do we perform inference, yes = true, no = false
     if (params.infer_from_data == true) {
-        println "Infer from Data is enabled."
         // 2) if yes, is experiment name empty or not given
+        if (!params.exp_name) {
+            params.exp_name = ""; // Set default value if not provided
+        }
         output_name = Channel.of("${params.model_type}_model_prediction_inference.csv")
-        (ch_config_for_analysis, ch_infer_csv) = infer_from_data(ch_model_to_infer_config.view(), params.exp_name, ch_test_data.view(), output_name, datetime_string, params.output_dir)
-    //    println "Preview of analysis config that will be used for Inferring data: "
-      //  ch_config_for_analysis.view()
+        (ch_config_for_analysis, ch_infer_csv) = infer_from_data(ch_model_to_infer_config.view(),
+         params.exp_name, 
+         ch_test_data.view(), 
+         output_name, datetime_string, 
+         params.output_dir)
+        ch_config_for_analysis.view()
     } else {
-//        ch_config_for_analysis = Channel.fromPath("$PWD/${params.output_dir}/configs/analysis/xgboost_analysis_config.yml", checkIfExists: true)
-  //      ch_infer_csv = Channel.fromPath("$PWD/${params.output_dir}/Modelling/data/predicted/*.csv", checkIfExists: true)
-    //    println "Inference from data not performed"
-          def predictedDir = new File("${params.output_dir}/Modelling/data/predicted")
-          if (predictedDir.isEmpty()) {
+       // print("Inference from data not performed")
+        def predictedDir = new File("${params.output_dir}/Modelling/data/predicted")
+        def csvFiles = predictedDir.listFiles(new FilenameFilter() {
+            public boolean accept(File dir, String name) {
+            return name.toLowerCase().endsWith(".csv")
+            }
+	    })
+        if (ymlFiles == null || ymlFiles.length == 0) {
             // Simply continue if the directory does not exist
             println("Directory ${params.output_dir}/Modelling/data/predicted does not exist, continuing...")
-          } else {
+        } else {
             ch_config_for_analysis = Channel.fromPath("${params.output_dir}/configs/analysis/xgboost_analysis_config.yml", checkIfExists: true)
             ch_infer_csv = Channel.fromPath("${params.output_dir}/Modelling/data/predicted/*.csv", checkIfExists: true)
             ch_config_for_analysis.view()
             print("Inference from data not performed")
-          }
+        }
     }
 
     // analyze data
