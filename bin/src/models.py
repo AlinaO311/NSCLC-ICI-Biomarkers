@@ -12,7 +12,7 @@ import numpy as np
 import pandas as pd
 import xgboost as xgb
 import psutil
-from sklearn.model_selection import KFold, cross_val_score
+from sklearn.model_selection import train_test_split, GridSearchCV
 from tensorflow import keras
 
 
@@ -48,30 +48,24 @@ class BaseModel(ABC):
     def _load_model(self, model_path: Path) -> Any:
         """Internal method for loading an previously trained model from disk."""
 
-
 class XGBoost(BaseModel):
     """An wrapper for the XGBoost model.
-
     Public methods:
     train -- Trains the model on the training data.
     explain_weights -- Returns an eli5 explanation of the model.
     inference -- Run inference on the predictor data set.
     save_model -- Save the model at the specified location.
     _load_model -- Loads an existing model from a directory.
-
     Instance variables:
     config -- The configuration used to initialize the model.
     model -- The internal XGBoost model.
     """
-
     MODEL_FILE_NAME = "model.json"
 
     def __init__(self, config: dict, model_dir_path: Optional[Path] = None) -> None:
         """Initialize a XGBoost model.
-
         Arguments:
             config -- Configuration for the model.
-
         Keyword Arguments:
             model_dir_path -- Path to a stored XGBoost model. If given, the model
                             will be loaded from disk.
@@ -79,7 +73,7 @@ class XGBoost(BaseModel):
         self.config = config
 
         if model_dir_path:
-            print(f"Loading model from: { os.path.join(model_dir_path , self.MODEL_FILE_NAME)}")
+            print(f"Loading model from: {os.path.join(model_dir_path, self.MODEL_FILE_NAME)}")
             self.model = self._load_model(model_dir_path)
         else:
             print("Creating new model.")
@@ -87,36 +81,90 @@ class XGBoost(BaseModel):
                 **self.config["args"],
                 random_state=self.config["random_seed"],
             )
-
         super().__init__()
-    
+
     def train(self, x_train: pd.DataFrame, y_train: pd.DataFrame) -> None:
         """Trains the model on the given training data.
-
         Arguments:
             x_train -- The training data set.
             y_train -- The corresponding ground truth.
         """
+        # Split the train data into training and testing sets
+        X_train, X_test, Y_train, y_test = train_test_split(x_train, y_train, test_size=0.3, random_state=42)
+        dtrain = xgb.DMatrix(X_train, label=Y_train)
+        ## this replaces k fold by nfold = 5
+        cv_results = xgb.cv(
+            self.config["args"],
+            dtrain,
+            num_boost_round=100,
+            nfold=5,
+            metrics={'error'},
+            early_stopping_rounds=10,
+            seed=self.config["random_seed"]
+        )
+        # Gather the best number of rounds
+        best_num_boost_round = cv_results['test-error-mean'].idxmin()
+
+        # Update the model's n_estimators parameter
+        self.model.set_params(n_estimators=best_num_boost_round)
+
+        # Train the model - try X_train from above split?
         self.model.fit(x_train, y_train)
 
-        scores = cross_val_score(self.model, x_train, y_train, cv=5)
-        print("Mean cross-validation score: %.2f" % scores.mean())
+        # After training, update the Booster
+        booster = self.model.get_booster()
+        self.model._Booster = booster
+        # Train the model with the determined number of boosting rounds
+ #       self.model = xgb.XGBClassifier(
+  #      **self.config["args"],
+   #     random_state=self.config["random_seed"],
+   #     n_estimators=best_num_boost_round)
 
-        kfold = KFold(n_splits=10, shuffle=True)
-        kf_cv_scores = cross_val_score(self.model, x_train, y_train, cv=kfold)
-        print("K-fold CV average score: %.2f" % kf_cv_scores.mean())
+        def create_param_grid(params):
+            param_grid = {}
+            for key, value in params.items():
+                if isinstance(value, int):
+                    param_grid[key] = [value - 2, value, value + 2]
+                elif isinstance(value, float):
+                    if key == 'eta':  # learning rate
+                        fraction = value - (0.1 * 2)
+                        param_grid[key] = [value, round(value - 0.1, 2), round(value - (0.1 * 2), 2),
+                                           round(fraction / 2, 2), round(fraction / 10, 2)]
+                    if key == 'alpha' or 'lambda':  # increments by 10
+                        # L1 regularization - complexity penalty
+                        # L2 regularization - penalty for size of weights
+                        fraction = value * 10  # increments by 10
+                        param_grid[key] = [fraction / 100, value, fraction, fraction * 10]
+            return param_grid
 
+        param_grid = create_param_grid(self.config["args"])
+        grid_search = GridSearchCV(
+            estimator=self.model,
+            param_grid=param_grid,
+            scoring='accuracy',
+            cv=5,
+            verbose=1
+        )
+        grid_search.fit(x_train, y_train)
+        print("Best parameters found: ", grid_search.best_params_)
+        print("Best accuracy found: ", grid_search.best_score_)
+        # Extract the average score
+        mean_cv_score = cv_results['test-error-mean'].min()
+        print("Mean cross-validation score: %.4f" % mean_cv_score)
+        # Extract the best score
+        best_mean_cv_score = grid_search.best_score_
+        print(f"Best mean cross-validation score: {best_mean_cv_score}")
 
     def explain_weights(self) -> str:
         """Returns an eli5 explanation of the model.
 
         Returns:
-            The eli5 explination as a string.
+            The eli5 explanation as a string.
         """
         weights = eli5.format_as_text(eli5.explain_weights(self.model))
         return f"Eli5 XGBoost weights\n {weights}"
 
-    def inference(self, x_test: pd.DataFrame) -> pd.DataFrame:
+    def inference(self, x_test: pd.DataFrame, y_test: pd.DataFrame) -> pd.DataFrame:
         """Run inference on the predictor data set.
 
         Arguments:
@@ -125,8 +173,10 @@ class XGBoost(BaseModel):
         Returns:
             A Pandas dataframe with the predicted values.
         """
-        return self.model.predict(x_test)
-
+        dtest = xgb.DMatrix(x_test, label=y_test)
+        y_pred = self.model.predict(dtest)
+        y_pred_binary = np.where(y_pred > 0.5, 1, 0)
+        return y_pred_binary
 
     def save_model(self, directory: Path) -> None:
         """Save the model at the specified location.
