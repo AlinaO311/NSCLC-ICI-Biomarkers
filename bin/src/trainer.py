@@ -143,12 +143,20 @@ class Trainer:
             output_file -- The path to where to save the resulting data set.
         """
         x_test = self.dataloader.get_data()
-        y_true = self.dataloader.get_ground_truth()
+        y_test = self.dataloader.get_ground_truth()
 
         print("Performing inference...")
-        y_pred = pd.DataFrame(self.model.inference(x_test), index=None, columns=None)
+        y_pred = pd.DataFrame(self.model.inference(x_test, y_test), index=None, columns=None)
 
         self._save_prediction(
-            data=x_test, y_true=y_true, y_pred=y_pred, output_file=output_file
+            data=x_test, y_true=y_test, y_pred=y_pred, output_file=output_file
         )
+#        y_true = self.dataloader.get_ground_truth()
+
+ #       print("Performing inference...")
+  #      y_pred = pd.DataFrame(self.model.inference(x_test), index=None, columns=None)
+
+   #     self._save_prediction(
+    #        data=x_test, y_true=y_true, y_pred=y_pred, output_file=output_file
+     #   )
 
