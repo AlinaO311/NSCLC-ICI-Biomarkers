@@ -132,7 +132,7 @@ workflow {
      //   ch_train_config.view()
     } // else load previously generated train, test sets
     else {
-         def preprocDir = new File("${params.output_dir}/configs/preprocess/")
+         def preprocDir = new File("${params.output_dir}/configs/models/")
          def ymlFiles = preprocDir.listFiles(new FilenameFilter() {
             public boolean accept(File dir, String name) {
             return name.toLowerCase().endsWith(".yml")
@@ -142,7 +142,7 @@ workflow {
              // Simply continue if the directory does not exist
              println("No preprocess Directory, continuing...")
          } else {
-            ch_train_config = Channel.fromPath("${params.output_dir}/configs/preprocess/*.yml", checkIfExists: true)
+            ch_train_config = Channel.fromPath("${params.output_dir}/configs/models/*.yml", checkIfExists: true)
             ch_train_data = Channel.fromPath("${params.output_dir}/Modelling/data/preprocessed/${params.preproc_data}/data/train_data.csv")
             ch_test_data = Channel.fromPath("${params.output_dir}/Modelling/data/preprocessed/${params.preproc_data}/data/test_data.csv")
          }
