@@ -45,6 +45,11 @@ if __name__ == "__main__":
     if train_name == "xgboost_model":
         if df.select_dtypes(include=['object', 'category']).empty:
             yml_dict = """\
+            # Metrics like Accuracy, Precision, Recall and F1-score.
+            metrics: true
+
+            # Eli5 to explain model weights. Must provide a model path.
+            explain_model_weights_eli5: true
             # List of confusion matrices to plot.
             confusion_matrix: [
                 {
@@ -107,9 +112,16 @@ if __name__ == "__main__":
             # Identify categorical columns
             categorical_columns = df.select_dtypes(include=['object', 'category']).columns.tolist()
             # Filter columns containing the string 'SMOKING'
-            smoking_columns = [col for col in df.columns if 'SMOKING' in col]
-            print(smoking_columns)
+            #smoking_columns = [col for col in df.columns if 'SMOKING' in col]
+            cat_col = categorical_columns[0]
+            print(cat_col)
             yml_dict = """\
+            # Metrics like Accuracy, Precision, Recall and F1-score.
+            metrics: true
+
+            # Eli5 to explain model weights. Must provide a model path.
+            explain_model_weights_eli5: true
+
             # List of confusion matrices to plot.
             confusion_matrix: [
                 {
@@ -132,10 +144,10 @@ if __name__ == "__main__":
             ]
             # stacked bar plot for one-hot encoded data
             stacked_bar_plot: [
-            {   
-                output_name: "smoking_history_stacked_bar_plot",
+            {
+                output_name: ,
                 columns: ,
-                title: "Smoking History"
+                title: 
                 }
             ]
             # List of scatterplots to plot. Any nan values will be dropped.
@@ -164,7 +176,9 @@ if __name__ == "__main__":
             yaml.preserve_quotes = True
             yaml.explicit_start = True
             yaml_dump = yaml.load(yml_dict)
-            yaml_dump['stacked_bar_plot'][-1]['columns'] = smoking_columns
+            yaml_dump['stacked_bar_plot'][-1]['output_name'] = cat_col+"stacked_barplot"
+            yaml_dump['stacked_bar_plot'][-1]['columns'] = cat_col
+            yaml_dump['stacked_bar_plot'][-1]['title'] = cat_col+" stacked bar plot for categorical data"
         yaml.preserve_quotes = True
         yaml.explicit_start = True
         yaml_dump = yaml.load(yml_dict)
@@ -195,14 +209,12 @@ if __name__ == "__main__":
             # Metrics like Accuracy, Precision, Recall and F1-score.
             metrics: true
             # Eli5 to explain model weights. Must provide a model path.
-            # DOES NOT WORK WITH KERAS FEED FORWARD NETWORK.
-            explain_model_weights_eli5: false
             # List of confusion matrices to plot.
         confusion_matrix: [
             {
         output_name: "confusion_matrix",
-        ground_truth_col: "PFS_STATUS",
-        prediction_col: "predicted" 
+        ground_truth_col: "DURABLE_CLINICAL_BENEFIT",
+        prediction_col: "predicted"
         }
     ]
         # List of histograms to plot. Any nan values will be dropped.
@@ -223,7 +235,7 @@ if __name__ == "__main__":
         output_name: "Diagnosis_Age_vs_TMB_norm_log2__scatter_plot",
         x_column: "AGE",
         y_column: "TMB_norm_log2",
-        color_column: "Treatment_Outcome"
+        color_column: "DURABLE_CLINICAL_BENEFIT"
     }
     ]
     # List of TSNE reductions to plot. Only works with numerical data.
