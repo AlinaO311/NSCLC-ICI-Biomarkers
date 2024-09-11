@@ -3,7 +3,7 @@
 
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Optional, Union
 
 import os
 import eli5
@@ -164,19 +164,19 @@ class XGBoost(BaseModel):
         weights = eli5.format_as_text(eli5.explain_weights(self.model))
         return f"Eli5 XGBoost weights\n {weights}"
 
-    def inference(self, x_test: pd.DataFrame, y_test: pd.DataFrame) -> pd.DataFrame:
+    def inference(self, x_test: pd.DataFrame, y_test: Optional[Union[pd.DataFrame, pd.Series, np.ndarray]] = None) -> pd.DataFrame:
         """Run inference on the predictor data set.
 
         Arguments:
             x_test -- The predictor data set.
+            y_test -- The test set outcomes to specify labels.
 
         Returns:
             A Pandas dataframe with the predicted values.
         """
         dtest = xgb.DMatrix(x_test, label=y_test)
         y_pred = self.model.predict(dtest)
-        y_pred_binary = np.where(y_pred > 0.5, 1, 0)
-        return y_pred_binary
+        return y_pred
 
     def save_model(self, directory: Path) -> None:
         """Save the model at the specified location.
