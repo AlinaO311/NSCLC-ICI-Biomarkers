@@ -119,9 +119,7 @@ class Trainer:
     def train(self) -> None:
         """Train the model using the training data (specified in the config file)."""
         x_train = self.dataloader.get_data()
-        print(x_train.apply(lambda x: x.unique()))
         y_train = self.dataloader.get_ground_truth()
-        print(y_train.unique())
 
         print("\n\nSummarising training data before training:\n")
         x_train.info(memory_usage=False) # Prints info.
@@ -142,12 +140,27 @@ class Trainer:
         Arguments:
             output_file -- The path to where to save the resulting data set.
         """
+        # Load test dataset
         x_test = self.dataloader.get_data()
+        # Load ground truth column as y test
         y_test = self.dataloader.get_ground_truth()
 
-        print("Performing inference...")
-        y_pred = pd.DataFrame(self.model.inference(x_test, y_test), index=None, columns=None)
+        print('y_test info from predict ')
+        print(y_test.head())
+        print('y_test dtype:' + y_test.dtype)
 
+        # Coerce NumPy array to pd.DataFrame
+        if not isinstance(y_test, pd.FataFrame):
+            y_test = pd.DataFrame(y_test, columns=["ground_truth"])
+
+        print("Performing inference...")
+        #create dataframe of output of prediction on x_test and y_test [the outcome column]
+        y_pred = pd.DataFrame(self.model.inference(x_test, y_test), columns=["predicted"])
+
+        print("Showing y_pred : ")
+        print(y_pred.head())
+
+        #save prediction as DF of full test dataset, the true values of outcome y_test and predicted values of outcome y_pred
         self._save_prediction(
             data=x_test, y_true=y_test, y_pred=y_pred, output_file=output_file
         )
