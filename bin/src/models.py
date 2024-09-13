@@ -83,7 +83,7 @@ class XGBoost(BaseModel):
             )
         super().__init__()
 
-    def train(self, x_train: pd.DataFrame, y_train: pd.DataFrame) -> None:
+    def train(self, x_train: pd.DataFrame, y_train: pd.DataFrame) -> xgb.XGBClassifier:
         """Trains the model on the given training data.
         Arguments:
             x_train -- The training data set.
@@ -114,11 +114,6 @@ class XGBoost(BaseModel):
         # After training, update the Booster
         booster = self.model.get_booster()
         self.model._Booster = booster
-        # Train the model with the determined number of boosting rounds
- #       self.model = xgb.XGBClassifier(
-  #      **self.config["args"],
-   #     random_state=self.config["random_seed"],
-   #     n_estimators=best_num_boost_round)
 
         def create_param_grid(params):
             param_grid = {}
@@ -154,6 +149,7 @@ class XGBoost(BaseModel):
         # Extract the best score
         best_mean_cv_score = grid_search.best_score_
         print(f"Best mean cross-validation score: {best_mean_cv_score}")
+        return grid_search.best_params_
 
     def explain_weights(self) -> str:
         """Returns an eli5 explanation of the model.
@@ -175,6 +171,9 @@ class XGBoost(BaseModel):
             A Pandas dataframe with the predicted values.
         """
         dtest = xgb.DMatrix(x_test, label=y_test)
+        print(self.model)
+        print('inference print dtest: ')
+        print(dtest)
         y_pred = self.model.predict(dtest)
         return y_pred
 
