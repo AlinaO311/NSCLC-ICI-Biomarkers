@@ -79,6 +79,10 @@ class Trainer:
                 False
             ), "ERROR: No matching model type found! Check spelling in the model config file?"
 
+    def _update_config(self, updated_params: dict) -> None:
+        """Update self.config with the parameters returned from model training."""
+        self.config.update(updated_params)
+
     def _save_trained_model(self) -> None:
         """Save the machine learning model to disk."""
         # Prepare save folder.
@@ -111,13 +115,15 @@ class Trainer:
         print(f"\nSaving predictions to {output_file}")
         output_file.parent.mkdir(exist_ok=True, parents=True)
 
-        # Save predictions to csv file.
+        # Take gt_column value from config as true values of y (outcome) - whatever the string was
         data[self.config["gt_column"]] = y_true
+        # Predicted values of outcome taked from output from xgb saved as 'predicted'
         data["predicted"] = y_pred
+        # Save predictions to csv file.
         data.to_csv(output_file, index=False)
 
     def train(self) -> None:
-        """Train the model using the training data (specified in the config file)."""
+        """Method Train the model using the training data (specified in the config file)."""
         x_train = self.dataloader.get_data()
         y_train = self.dataloader.get_ground_truth()
 
@@ -129,7 +135,14 @@ class Trainer:
         )
 
         print("\n--------Training model-------")
-        self.model.train(x_train, y_train)
+        # save updated model to train yml ?
+#        self.model.train(x_train, y_train)
+        # Train the model, and assume it returns some information needed to update the config.
+        updated_params = self.model.train(x_train, y_train)
+
+        # Update self.config with the new parameters or settings.
+        self._update_config(updated_params)
+
         print("\n---------Finished!----------")
 
         self._save_trained_model()
@@ -147,11 +160,15 @@ class Trainer:
 
         print('y_test info from predict ')
         print(y_test.head())
-        print('y_test dtype:' + y_test.dtype)
 
         # Coerce NumPy array to pd.DataFrame
-        if not isinstance(y_test, pd.FataFrame):
-            y_test = pd.DataFrame(y_test, columns=["ground_truth"])
+        if not isinstance(y_test, pd.DataFrame):
+            y_test = pd.DataFrame(y_test)
+        print('ytest dtypes')
+        print(y_test.head())
+
+        print('x_test columns')
+        print(x_test.columns)
 
         print("Performing inference...")
         #create dataframe of output of prediction on x_test and y_test [the outcome column]
