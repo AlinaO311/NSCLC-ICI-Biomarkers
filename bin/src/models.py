@@ -170,13 +170,9 @@ class XGBoost(BaseModel):
         Returns:
             A Pandas dataframe with the predicted values.
         """
-        dtest = xgb.DMatrix(x_test, label=y_test)
-        print(self.model)
-        print('inference print dtest: ')
-        print(dtest)
-        y_pred = self.model.predict(dtest)
+        y_pred = self.model.predict(x_test)
         return y_pred
-
+    
     def save_model(self, directory: Path) -> None:
         """Save the model at the specified location.
 
@@ -197,7 +193,7 @@ class XGBoost(BaseModel):
         """
         model_path = os.path.join(model_dir_path , self.MODEL_FILE_NAME)
         assert os.path.isfile(model_path), f"ERROR: No model found at {model_path}"
-
+        # here model is built with scikit-learn API XGBoost, pd.DataFrame and Numpy arrays can be passed directly
         model = xgb.XGBClassifier()
         booster = xgb.Booster()
         booster.load_model(model_path)
