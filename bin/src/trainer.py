@@ -80,8 +80,12 @@ class Trainer:
             ), "ERROR: No matching model type found! Check spelling in the model config file?"
 
     def _update_config(self, updated_params: dict) -> None:
-        """Update self.config with the parameters returned from model training."""
-        self.config.update(updated_params)
+        """Update the 'args' section of self.config with the parameters returned from model training."""
+        # Check if 'args' exists in self.config, and if not, initialize it
+        if 'args' not in self.config:
+            self.config['args'] = {}
+        # Update only the 'args' part of the configuration
+        self.config['args'].update(updated_params)
 
     def _save_trained_model(self) -> None:
         """Save the machine learning model to disk."""
@@ -158,35 +162,15 @@ class Trainer:
         # Load ground truth column as y test
         y_test = self.dataloader.get_ground_truth()
 
-        print('y_test info from predict ')
-        print(y_test.head())
-
         # Coerce NumPy array to pd.DataFrame
         if not isinstance(y_test, pd.DataFrame):
             y_test = pd.DataFrame(y_test)
-        print('ytest dtypes')
-        print(y_test.head())
-
-        print('x_test columns')
-        print(x_test.columns)
 
         print("Performing inference...")
         #create dataframe of output of prediction on x_test and y_test [the outcome column]
-        y_pred = pd.DataFrame(self.model.inference(x_test, y_test), columns=["predicted"])
-
-        print("Showing y_pred : ")
-        print(y_pred.head())
+        y_pred = pd.DataFrame(self.model.inference(x_test, y_test))
 
         #save prediction as DF of full test dataset, the true values of outcome y_test and predicted values of outcome y_pred
         self._save_prediction(
             data=x_test, y_true=y_test, y_pred=y_pred, output_file=output_file
         )
-#        y_true = self.dataloader.get_ground_truth()
-
- #       print("Performing inference...")
-  #      y_pred = pd.DataFrame(self.model.inference(x_test), index=None, columns=None)
-
-   #     self._save_prediction(
-    #        data=x_test, y_true=y_true, y_pred=y_pred, output_file=output_file
-     #   )
-
