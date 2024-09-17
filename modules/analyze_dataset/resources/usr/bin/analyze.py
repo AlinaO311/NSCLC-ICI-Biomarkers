@@ -17,12 +17,12 @@ def main(analysis_config: Path, experiment_dir: Path, dir: Path, data_path: Opti
         pathlist = ['/' if x == '' else x for x in pathlist]
         model_path = os.path.join(*pathlist[:-1], "output" , "models")
         model_config_path = experiment_dir
+        output_path = os.path.join(*pathlist[:-1], dir ,"Modelling/output" ,"analysis" )
     else:
-        pathlist = os.path.dirname(data_path).split('/')[:-2]
-        pathlist = ['/' if x == '' else x for x in pathlist]
-        model_path = os.path.join(*pathlist,  "output" , "models", experiment_dir ,  "model/model.json")
-        model_config_path = os.path.join(*pathlist,  "output" , "models", experiment_dir, "config/model_config.yml")  # config file from exp_name
-    output_path = os.path.join(*pathlist[:-1], dir ,"Modelling/output" ,"analysis" )
+        pathlist = os.path.dirname(data_path).split('work', 1)[0]
+        model_path = os.path.join(pathlist, dir, "Modelling/output" , "models", experiment_dir ,  "model")
+        model_config_path = os.path.join(pathlist, dir, "Modelling/output" , "models", experiment_dir, "config/model_config.yml")  # config file from exp_name
+        output_path = os.path.join(pathlist, dir ,"Modelling/output" ,"analysis" )
 #    model_path = os.path.join(*pathlist[:-1], dir, "Modelling/output" , "models", experiment_dir, "model/model.json") # json file from exp_name
  #   model_config_path = os.path.join(*pathlist[:-1] , dir ,"Modelling/output" , "models", experiment_dir, "config/model_config.yml")  # config file from exp_name
     print('model_config_path ', model_config_path)
