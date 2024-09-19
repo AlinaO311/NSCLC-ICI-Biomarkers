@@ -220,30 +220,20 @@ workflow {
 
     // analyze data
     if (params.analyze == true) {
-        if (!params.exp_name && params.preprocess_datasets == true) {
+        if (!params.exp_name && params.train == true) {
             if  (expName == null || expName.isEmpty()) {
-                // Collect the datetime from the channel
-                datetime_string
-                    .map { it.trim() }
-                    .set { collected_datetime }
-
-                // Define a channel with the desired filename format
-                ch_exp_name = collected_datetime.map { datetime ->
-                    "${params.model_type}_model_${datetime_string}"
+                println "Experiment name is empty ${expName}"  
+                base = "${params.output_dir}/configs/analysis"
+                expDir = findMostRecentFile(base)
+                ch_analyze_model = expDir.map { mostRecentFile ->
+                 def fullPath_yml = "${base}/${mostRecentFile.trim()}/*.yml"
+                 return fullPath_yml
                 }
-                println "Experiment name is empty ${ch_exp_name.view()}"               
-                // Use the extracted value in the analysis
-                analyze_dataset(ch_config_for_analysis, ch_exp_name.view(), ch_infer_csv.view(), datetime_string, params.output_dir)
-
+                println "Using experiment model: ${ch_analyze_model.view()}"
+                analyze_dataset(ch_config_for_analysis, ch_analyze_model, ch_infer_csv.view(), datetime_string, params.output_dir)
             } else {
-                println "Experiment name is not empty. Using most recent experiment."
-                ch_exp_name = expName.map { mostRecentFile ->
-                def experiment_name = mostRecentFile.trim()
-                return experiment_name
-            }
-            println "Experiment name is empty. Using most recent experiment : ${ch_exp_name.view()}"
-            println "Preview of config being used for analysis : ${ch_config_for_analysis.view()}"
-            analyze_dataset(ch_config_for_analysis, ch_exp_name.view(), ch_infer_csv.view(), datetime_string, params.output_dir)
+            println "Using given experiment : ${expName}"
+            analyze_dataset(ch_config_for_analysis, expName, ch_infer_csv.view(), datetime_string, params.output_dir)
             }
         } else {
             println "Using given experiment : ${params.exp_name}"
@@ -252,7 +242,6 @@ workflow {
     } else {
         print("Analysis not performed")
     }
-
 }
 
 /* 
