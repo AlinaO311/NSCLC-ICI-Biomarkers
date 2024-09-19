@@ -101,8 +101,6 @@ def prepare_save_folder(
 
     # Store configs.
     for config_name in configs.keys():
-        print('config_name', config_name)
-        print('val' , configs[config_name])
         copy_config(configs[config_name], os.path.join(output_dir, "config"), config_name)
 
     # Store git status.
