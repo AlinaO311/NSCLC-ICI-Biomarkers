@@ -22,16 +22,17 @@ log.info """\
         fetch_dataset  : ${params.fetch_dataset}
         dataset_names   : ${params.dataset_names}
         datatype        : ${params.datatype}
+        mutations_data  : ${params.mutations_data}
 
         visualize	: ${params.visualize}
 
-        mutations_data  : ${params.mutations_data}
-
+        test_set_size   : ${params.test_set_size}
+        random_seed     : ${params.random_seed}
         preprocess	: ${params.preprocess}
+
         preproc_data    : ${params.preproc_data}
         remove_cols     : ${params.cols_to_remove}
         model_type      : ${params.model_type}
-
         train           : ${params.train}
 
         infer_from_data : ${params.infer_from_data}
@@ -109,7 +110,12 @@ workflow {
 
 	    mut_file = mut_file.collect()
 
-        (ch_preproc_config, ch_data) = fetch_dataset(params.dataset_names, params.datatype, params.mutations_data, datetime_string)
+        (ch_preproc_config, ch_data) = fetch_dataset(params.dataset_names, 
+        params.datatype, 
+        params.mutations_data, 
+        datetime_string, 
+        params.test_set_size, 
+        params.random_seed)
         println "Preview of fetch dataset harmonized data output channel."
         ch_data.view()
     }
@@ -166,6 +172,7 @@ workflow {
             if (!params.exp_name) {
             base = "${params.output_dir}/Modelling/output/models"
             expName = findMostRecentFile(base)
+            println "Using experiment model when train not run with experiment name: ${expName}"
             ch_model_to_infer_config = expName.map { mostRecentFile ->
                  def fullPath_yml = "${base}/${mostRecentFile.trim()}/config/*.yml"
                  return fullPath_yml
@@ -217,31 +224,35 @@ workflow {
             print("Inference from data not performed")
         }
     }
-
+    
     // analyze data
     if (params.analyze == true) {
-        if (!params.exp_name && params.train == true) {
-            if  (expName == null || expName.isEmpty()) {
-                println "Experiment name is empty ${expName}"  
-                base = "${params.output_dir}/configs/analysis"
-                expDir = findMostRecentFile(base)
-                ch_analyze_model = expDir.map { mostRecentFile ->
-                 def fullPath_yml = "${base}/${mostRecentFile.trim()}/*.yml"
-                 return fullPath_yml
+        if (params.train == true) {
+            // Collect the datetime from the channel
+                datetime_string
+                    .map { it.trim() }
+                    .set { collected_datetime }
+
+                // Define a channel with the desired filename format
+                ch_exp_name = collected_datetime.map { datetime ->
+                    "${params.model_type}_model_${datetime_string}"
                 }
-                println "Using experiment model: ${ch_analyze_model.view()}"
-                analyze_dataset(ch_config_for_analysis, ch_analyze_model, ch_infer_csv.view(), datetime_string, params.output_dir)
-            } else {
-            println "Using given experiment : ${expName}"
-            analyze_dataset(ch_config_for_analysis, expName, ch_infer_csv.view(), datetime_string, params.output_dir)
-            }
+                println "Using experiment model following training : ${ch_exp_name.view()}"               
+                // Use the extracted value in the analysis
+                analyze_dataset(ch_config_for_analysis, ch_exp_name.view(), ch_infer_csv.view(), datetime_string, params.output_dir)
         } else {
-            println "Using given experiment : ${params.exp_name}"
-            analyze_dataset(ch_config_for_analysis, params.exp_name, ch_infer_csv.view(), datetime_string, params.output_dir)
+            if (!params.exp_name) {
+                println "Using given experiment for analysis: ${expName}"
+                analyze_dataset(ch_config_for_analysis, expName , ch_infer_csv.view(), datetime_string, params.output_dir)
+            } else{
+                println "Using given experiment : ${params.exp_name}"
+                analyze_dataset(ch_config_for_analysis, params.exp_name, ch_infer_csv.view(), datetime_string, params.output_dir)
             }
+        }   
     } else {
         print("Analysis not performed")
     }
+
 }
 
 /* 
