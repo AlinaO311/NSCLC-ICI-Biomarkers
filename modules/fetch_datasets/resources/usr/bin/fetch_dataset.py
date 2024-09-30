@@ -118,13 +118,12 @@ def normalize(x):
     return (x - x.mean()) / x.std()
 
 class FetchData(object):
-    def __init__(self, dataSets, mutationLists):
-        	self.data = dataSets
-       		self.mutations = mutationLists
+    def __init__(self, dataSets, mutationLists, featureFile):
+        self.data = dataSets
+       	self.mutations = mutationLists
+	self.features = featureFile
     def _get_data(self):
-        print("Data directories included:")
         for study in self.data:
-            print(study)
             for entry in os.listdir(os.path.join(cwd ,'Data', study)):
                    if entry in file_inlist:
                        path_list.append(os.path.join(cwd , 'Data', study , entry) )
@@ -149,7 +148,8 @@ class FetchData(object):
         return patientSets, sampleSets, mutSets 
     def _harmonize(self, patientSets, sampleSets, mutSets):
         # read in feature list
-        feature_file = open(os.path.join(cwd , 'Data/features_v1.txt'), "r") ###TODO: mod to allow user input? or allow what type specs
+        ##feature_file = open(os.path.join(cwd , 'Data/features_v1.txt'), "r") ###TODO: mod to allow user input? or allow what type specs
+        feature_file = open(os.path.join(cwd , self.features), "r")
         # reading the file 
         feature_read = feature_file.read() 
         # replacing end splitting the text when newline ('\n') is seen, remove empty str. 
@@ -290,8 +290,14 @@ class FetchData(object):
             all_mut_data.drop('HUGO_SYMBOL', axis=1, inplace=True)
         # if count is greater than 2 set to 1, else 0
         mutDF.iloc[:,1:] = mutDF.iloc[:,1:].applymap(lambda x: x if x >= 1 else 0)
-        #mutDF = mutDF.loc[:, pd.notnull(mutDF.columns)]
-        mutDF = mutDF.drop(columns=[np.nan])
+        # Try dropping columns with NaN values in the column names first
+        try:
+            mutDF = mutDF.drop(columns=[np.nan])
+        except KeyError:
+        # If no such columns exist or the operation fails, fall back to the original method
+            if mutDF.columns.isnull().any():
+                mutDF = mutDF.loc[:, pd.notnull(mutDF.columns)]
+        #mutDF = mutDF.drop(columns=[np.nan])
         length=len(names)
         for name in range(length):
              # sum across rows where col matches any of mutations in list muts - with strict matching
@@ -313,8 +319,10 @@ class FetchData(object):
             mutationMerged_dict['TMB_norm'] = mutationMerged_dict.groupby('STUDY_NAME')['TMB'].transform(normalize)
             mutationMerged_dict['TMB_norm_log2'] = mutationMerged_dict.groupby('STUDY_NAME')['TMB'].transform(log2_normalization)
         # Combine all data:
+        all_clinical_data.drop_duplicates(inplace=True)
+        mutationMerged_dict.drop_duplicates(inplace=True)
+        all_mut_data.drop_duplicates(inplace=True)
         patient_sample_data = pd.merge(all_clinical_data, mutationMerged_dict.merge(all_mut_data.rename(columns={'TUMOR_SAMPLE_BARCODE': 'SAMPLE_ID'}), 'left') , on=['PATIENT_ID','STUDY_NAME'], how='left')
-        print('shape of data directly after merge',patient_sample_data.shape)
         ### fix Durable clinical benefit entries
         def map_values(val):
             # Check if the value is NaN
@@ -393,6 +401,7 @@ if __name__ == '__main__':
     # user provided name for each run 
     parser.add_argument('--datatype', help='numerical or categorical', required=True)
     parser.add_argument('--mutations', help='File of mutations of interest', required=False, default='mutations.txt')
+    parser.add_argument('--features', help='File of features of interest', required=False, default='features.txt')
     # user provided test_set_size:
     parser.add_argument('--test_set_size', help='test set size, default: 0.2', required=False, default=0.2)
     # user provided seed
@@ -418,29 +427,29 @@ if __name__ == '__main__':
     if args.datatype == "numerical":
         config = {
             'preprocessor_name': "main_preprocessor",
-            'test_set_size': args.test_set_size ,# Part of data. 1 is all data.
-            'random_seed': args.random_seed ,# sets seed for training/test set splits
+            'test_set_size': float(args.test_set_size) ,# Part of data. 1 is all data.
+            'random_seed': int(args.random_seed) ,# sets seed for training/test set splits
             'output_name': "numerical_preprocess",
 
             'data_path': os.path.join(cwd, args.outdir ,'DataPrep','data_'+mydatetime+'.tsv')
         }
-        json_string = json.dumps(config)
-        data = yaml.load(json_string)
-        data.fa.set_block_style()
+     #   json_string = json.dumps(config)
+      #  data = yaml.load(json_string)
+      #  data.fa.set_block_style()
         with open("preprocess_config.yml", 'w') as f:
             yaml.dump(config, f)
     else:
         config = {
             'preprocessor_name': "non_null_one_hotted",
-            'test_set_size': args.test_set_size,
-            'random_seed': args.random_seed,
+            'test_set_size': float(args.test_set_size),
+            'random_seed': int(args.random_seed),
             'output_name': "categorical_preprocess",
 
             'data_path': os.path.join(cwd , args.outdir  ,'DataPrep','data_'+mydatetime+'.tsv')
         }
-        json_string = json.dumps(config)
-        data = yaml.load(json_string)
-        data.fa.set_block_style()
+      #  json_string = json.dumps(config)
+      #  data = yaml.load(json_string)
+      #  data.fa.set_block_style()
         with open("preprocess_config.yml", 'w') as f:
             yaml.dump(config, f)
     # save metadata
