@@ -16,27 +16,31 @@ process fetch_dataset {
     val dataset_names 
     val datatype
     val mutations_data
+    val feature_data
     val datetime_string
+    val test_set_size
+    val random_seed
+
 
     script:
     if (params.datatype == "categorical" & params.dataset_names == "") 
       """
-      fetch_dataset.py --datatype "categorical" --mutations ${mutations_data} --outdir ${params.output_dir} --datetime ${datetime_string}
+      fetch_dataset.py --datatype "categorical" --mutations ${mutations_data} --features ${feature_data} --outdir ${params.output_dir}   --test_set_size ${params.test_set_size}  --random_seed ${params.random_seed}   --datetime ${datetime_string} 
       """
     
     else if (params.datatype == "numerical" &  params.dataset_names == "" )
       """
-      fetch_dataset.py --datatype "numerical" --mutations ${mutations_data} --outdir ${params.output_dir} --datetime ${datetime_string}
+      fetch_dataset.py --datatype "numerical" --mutations ${mutations_data}  --features ${feature_data} --outdir ${params.output_dir}  --test_set_size ${params.test_set_size} --random_seed ${params.random_seed}   --datetime ${datetime_string} 
       """
     
     else if (params.datatype == "categorical" & params.dataset_names != "")
       """
-      fetch_dataset.py --dataset_names ${params.dataset_names} --datatype "categorical" --mutations ${mutations_data} --outdir ${params.output_dir} --datetime ${datetime_string}
+      fetch_dataset.py --dataset_names ${params.dataset_names}   --datatype "categorical"  --mutations ${mutations_data}  --features ${feature_data}  --outdir ${params.output_dir}  --test_set_size ${params.test_set_size}  --random_seed ${params.random_seed}  --datetime ${datetime_string} 
       """
     
     else if (params.datatype == "numerical" & params.dataset_names != "")
       """
-      fetch_dataset.py --dataset_names ${params.dataset_names} --datatype "numerical" --mutations ${mutations_data} --outdir ${params.output_dir} --datetime ${datetime_string}
+      fetch_dataset.py --dataset_names ${params.dataset_names}   --datatype "numerical"   --mutations ${mutations_data}  --features ${feature_data}  --outdir ${params.output_dir}   --test_set_size ${params.test_set_size}  --random_seed ${params.random_seed}  --datetime ${datetime_string} 
       """
     
     else
