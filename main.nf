@@ -23,6 +23,7 @@ log.info """\
         dataset_names   : ${params.dataset_names}
         datatype        : ${params.datatype}
         mutations_data  : ${params.mutations_data}
+        feature_data  : ${params.feature_data}
 
         visualize	: ${params.visualize}
 
@@ -100,6 +101,7 @@ workflow {
     datetime_string = GetDateTimeAsString()
      
     mut_file	   = Channel.fromPath("${params.mutations_data}")
+    feat_file       = Channel.fromPath("${params.feature_data}")
     
     // fetch example datasets if none specified
     if ( params.fetch_dataset == true ) {
@@ -108,11 +110,12 @@ workflow {
             it.readLines().collect { line -> line.tokenize("\t")[0] }
         }
 
-	    mut_file = mut_file.collect()
+	feat_file = feat_file.collect()
 
         (ch_preproc_config, ch_data) = fetch_dataset(params.dataset_names, 
         params.datatype, 
         params.mutations_data, 
+        params.feature_data,
         datetime_string, 
         params.test_set_size, 
         params.random_seed)
@@ -233,13 +236,14 @@ workflow {
                     .map { it.trim() }
                     .set { collected_datetime }
 
-                // Define a channel with the desired filename format
+                // Extract the value from the channel
                 ch_exp_name = collected_datetime.map { datetime ->
-                    "${params.model_type}_model_${datetime_string}"
-                }
-                println "Using experiment model following training : ${ch_exp_name.view()}"               
-                // Use the extracted value in the analysis
-                analyze_dataset(ch_config_for_analysis, ch_exp_name.view(), ch_infer_csv.view(), datetime_string, params.output_dir)
+                        // Define a channel with the desired filename format
+                        "${params.model_type}_model_${datetime}"
+                        // Use the extracted value in the analysis
+                    }
+                println "Using experiment model following training: ${ch_exp_name.view()}"
+                analyze_dataset(ch_config_for_analysis, ch_exp_name.view(), ch_infer_csv.view(), datetime_string, params.output_dir) 
         } else {
             if (!params.exp_name) {
                 println "Using given experiment for analysis: ${expName}"
