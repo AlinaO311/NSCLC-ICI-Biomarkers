@@ -121,7 +121,7 @@ class FetchData(object):
     def __init__(self, dataSets, mutationLists, featureFile):
         self.data = dataSets
        	self.mutations = mutationLists
-	self.features = featureFile
+        self.features = featureFile
     def _get_data(self):
         for study in self.data:
             for entry in os.listdir(os.path.join(cwd ,'Data', study)):
@@ -416,7 +416,7 @@ if __name__ == '__main__':
     mydatetime = time_val.strip()
     for study in args.dataset_names:
         datasets.append(study)
-    inputdata = Harmonize(datasets, args.mutations)
+    inputdata = Harmonize(datasets, args.mutations, args.features)
     print('Features from Data', inputdata.columns.tolist())
 
     # save data
