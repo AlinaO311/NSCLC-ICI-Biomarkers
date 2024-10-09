@@ -14,7 +14,7 @@ from dataloader import DataLoader
 from models import (KERAS_MODEL_NAME, XGBOOST_MODEL_NAME, KerasFeedForward,
                         XGBoost)
 from plots import (_confusion_matrix, histogram, scatter_plot, stacked_bar_plot,
-                       scatter_tsne_2d)
+                       scatter_tsne_2d, shap_tree_explainer)
 from utils import prepare_save_folder, read_config
 
 
@@ -97,6 +97,32 @@ class Analyzer:
             print("Saving eli5 info.")
             f.write(model.explain_weights())
 
+    def _plot_shap(
+        self,
+        save_path: Path,
+        output_name: str,
+        plotargs: Dict[str, Any] = {},
+    ) -> None:
+        """Create a SHAP tree explainer plot and saves the result.
+
+        Arguments:
+            save_path -- The path where to save the result.
+            output_name -- The desired name of the resulting plot image.
+            columns -- Which columns to use in the TSNE decomposition.
+            groupby -- How to group the data (a.k.a. the colors of the data points).
+
+        Keyword Arguments:
+            plotargs -- Any additional kwargs to the plot function.
+        """
+        X_data = self.dataloader.get_data()
+        model = self._init_model(self.model_path)
+
+        shap_tree_explainer(X_data, model , plotargs)
+
+        print(f"Saving '{output_name}' shap tree plot...")
+        plt.savefig( os.path.join(save_path, "analysis", output_name+".png"), dpi=300, bbox_inches="tight")
+        plt.close()
+
     def _plot_confusion_matrix(
         self,
         save_path: Path,
@@ -125,14 +151,6 @@ class Analyzer:
         data['ground_truth_labels'] = data[ground_truth_col].map({0: "Non-Responder", 1: "Responder"})
         data['predicted_labels'] = data[prediction_col].map({0: "Non-Responder", 1: "Responder"})
         uniq_labels = np.unique(np.concatenate((data['ground_truth_labels'], data['predicted_labels']))).tolist()
-#        minimal_data = pd.DataFrame({
- #       'ground_truth_labels': ['Non-Responder', 'Responder', 'Responder', 'Non-Responder'],
-  #      'predicted_labels': ['Responder', 'Responder', 'Non-Responder', 'Non-Responder']
-   #     })
-    #    ground_truth_labels = minimal_data['ground_truth_labels'].astype(str)
-     #   predicted_labels = minimal_data['predicted_labels'].astype(str)
-      #  class_labels = ['Non-Responder', 'Responder']
-        # Compute confusion matrix for minimal example
         _confusion_matrix(
         data['ground_truth_labels'],
         data['predicted_labels'],
@@ -290,6 +308,12 @@ class Analyzer:
             print("\n-----Plotting stacked bar plots.----")
             for stacked_bar in self.analysis_config["stacked_bar_plot"]:
                 self._plot_stacked_bar_plot(analysis_output_dir, **stacked_bar)
+
+        #Create shap plots.
+        if "shap_plot" in config_keys:
+            print("\n-----Plotting SHAP tree plots.----")
+            for shap_plot in self.analysis_config["shap_plot"]:
+                self._plot_shap_tree_explainer(analysis_output_dir, **shap_plot)
 
 
 
