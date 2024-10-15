@@ -1,10 +1,9 @@
 # You can use this file to create a conda environment for this pipeline:
-#   conda env create -f environment.yml
 name: nsclc-ici-biomarkers
 channels:
   - defaults
 dependencies:
-  - python=3.8
+  - python=3.9
   - matplotlib==3.5.2
   - numpy==1.22.4
   - pandas==1.4.2
@@ -24,11 +23,13 @@ dependencies:
     - Levenshtein==0.23.0
     - python-Levenshtein==0.23.0 
     - rapidfuzz==3.5.2
-    - nf-core
     - nltk==3.8.1
     - scikit-learn==1.1.1
     - scipy==1.8.1
     - ruamel.yaml<=0.18.0
     - tqdm==4.46.0
-    - shap==0.45.1
-  
+    - llvmlite==0.41.1 
+    - numba==0.58.1 
+    - shap==0.44.1 
+    - slicer==0.0.7
+    - psutil==6.0.0  
