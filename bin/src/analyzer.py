@@ -313,7 +313,7 @@ class Analyzer:
         if "shap_plot" in config_keys:
             print("\n-----Plotting SHAP tree plots.----")
             for shap_plot in self.analysis_config["shap_plot"]:
-                self._plot_shap_tree_explainer(analysis_output_dir, **shap_plot)
+                self._plot_shap(analysis_output_dir, **shap_plot)
 
 
 
