@@ -114,8 +114,12 @@ class Analyzer:
         Keyword Arguments:
             plotargs -- Any additional kwargs to the plot function.
         """
-        X_data = self.dataloader.get_data()
-        model = self._init_model(self.model_path)
+        X_data_full = self.dataloader.get_data()
+        X_data = X_data_full.drop(columns=["predicted", "predicted_labels", "ground_truth_labels"])
+        model_wrapper = self._init_model(self.model_path)  # Initializes the XGBoost wrapper
+        model = model_wrapper.get_model()
+        # Update the model settings to enable categorical feature handling
+        model.set_params(enable_categorical=True)
 
         shap_tree_explainer(X_data, model , plotargs)
 
