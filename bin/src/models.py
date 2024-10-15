@@ -198,7 +198,11 @@ class XGBoost(BaseModel):
         booster = xgb.Booster()
         booster.load_model(model_path)
         model._Booster = booster
-        return model
+        return model 
+
+    def get_model(self):
+        """Returns the internal XGBoost model (XGBClassifier)."""
+        return self.model
 
 
 class KerasFeedForward(BaseModel):
