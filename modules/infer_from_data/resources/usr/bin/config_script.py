@@ -51,7 +51,12 @@ if __name__ == "__main__":
             # Eli5 to explain model weights. Must provide a model path.
             explain_model_weights_eli5: true
             # create SHAP plot . Must provide model path.
-            shap_plot: true 
+            shap_plot: [
+                {
+                output_name: "shap_tree_explainer",
+                plotargs: { }
+                }
+            ]
 
             # List of confusion matrices to plot.
             confusion_matrix: [
@@ -125,7 +130,12 @@ if __name__ == "__main__":
             # Eli5 to explain model weights. Must provide a model path.
             explain_model_weights_eli5: true
             # create SHAP plot . Must provide model path.
-            shap_plot: true
+            shap_plot: [
+                {
+                output_name: "shap_tree_explainer",
+                plotargs: { }
+                }
+            ]
 
             # List of confusion matrices to plot.
             confusion_matrix: [
