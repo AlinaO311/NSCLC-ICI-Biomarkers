@@ -11,6 +11,7 @@ if(!params.datatype) {
 }
 
 include { fetch_dataset } from './modules/fetch_dataset'
+include { visualize_data } from './modules/visualize_data'
 include { preprocess_datasets } from './modules/preprocess_datasets'
 include { train_data} from './modules/train_data'
 include { infer_from_data } from './modules/infer_from_data'
@@ -127,9 +128,9 @@ workflow {
         ch_preproc_config = Channel.fromPath("${params.output_dir}/configs/preprocess/*.yml")
     }
    
-    // visualize missing data 
+    // visualize data including missing heatmao
     if (params.visualize) {
-        visualize_dataset(ch_data)
+        visualize_data(ch_data))
     } else {
         print("Skipping visualize process.")
     }
