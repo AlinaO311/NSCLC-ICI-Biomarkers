@@ -62,7 +62,7 @@ if __name__ == "__main__":
         yaml.preserve_quotes = True
         yaml.explicit_start = True
         yaml_dump = yaml.load(yml_dict)
-        yaml_dump['random_seed'] = config_to_load['random_seed']
+        yaml_dump['random_seed'] = int(config_to_load['random_seed'])
         yaml_dump['preprocessed_data_path'] = latest_file
         def format_lists_in_block_style_if_colon_found(val):
             """Convert all lists with a ':' in them to block style."""
