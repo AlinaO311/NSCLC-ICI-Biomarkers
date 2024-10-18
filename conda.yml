@@ -33,3 +33,5 @@ dependencies:
     - shap==0.44.1 
     - slicer==0.0.7
     - psutil==6.0.0  
+    - comut==0.0.3
+    - palettable==3.3.0
