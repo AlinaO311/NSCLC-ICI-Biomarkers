@@ -89,7 +89,8 @@ class Visualizer:
         # Split the 'type' column into two parts based on '_'
         melted[['gene', 'mutation']] = melted['category'].str.split('_', n=1, expand=True)
         recombined_data = pd.concat([melted, non_mut_cols], axis=1)
-        return recombined_data
+        recombined_df = recombined_data.drop(columns=['mutation', 'category','value'])
+        return recombined_df
 
     def _visualize_missing(self, recombined_data, save_path: Path) -> None:
         """
