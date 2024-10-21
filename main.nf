@@ -90,7 +90,7 @@ process findMostRecentFile {
 
 
 params.fetch_dataset = params.fetch_dataset ?: true
-params.visualize = params.visualize ?: false
+params.visualize = params.visualize ?: true
 params.preprocess = params.preprocess ?: true
 params.train = params.train ?: true
 params.infer_from_data = params.infer_from_data ?: true
@@ -130,7 +130,7 @@ workflow {
    
     // visualize data including missing heatmao
     if (params.visualize) {
-        visualize_data(ch_data))
+        visualize_data(ch_data, datetime_string , params.mutations_data ,  params.output_dir)
     } else {
         print("Skipping visualize process.")
     }
