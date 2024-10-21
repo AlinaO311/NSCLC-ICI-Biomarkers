@@ -62,37 +62,8 @@ class Visualizer:
         Path(output_folder).mkdir(exist_ok=True, parents=True)
         return output_folder
 
-    def _visualize_missing(self, save_path: Path) -> None:
-        """
-        Arguments:
-            data -- The data to visualize.
-        Returns:
-            A tuple with the training and test data sets.
-        """
-        # Create a boolean DataFrame where True is null
-        all_patient_sample_data_filtered = self.data.replace('', pd.NA)
-        null_values = all_patient_sample_data_filtered.isnull()
-        # Set up the matplotlib figure
-        plt.figure(figsize=(35, 8))
-        # Draw a heatmap with the boolean values and no cell labels
-        sns.heatmap(null_values, cbar=False, yticklabels=False)
-        plt.title("Heatmap of Null Values in DataFrame")
-        plt.show()
-        return plt.savefig( os.path.join(save_path , "missing_data_heatmap.png"))
-
-    def _plot_comut_variant(self, save_path: Path) -> None:
-        """
-        Arguments:
-            save_path -- The path to save visualization.
-        Returns:
-            An image of the comut variant plot.
-        """
-        # Read feature file
-        #feature_file = open(os.path.join(cwd , self.featurefile), "r")
-        #feature_read = feature_file.read()
-        # Add study name to feature list
-       # mut_list = list(filter(None, feature_read.split("\n") )).append("STUDY_NAME")
-       # load mutation collumns
+    def _prepare_data(self) -> pd.DataFrame:
+        """Prepare the data for visualization."""
         with open(os.path.join(cwd , self.mutfile), "r") as mut_file:
 	        mut_list = mut_file.read().translate({ord(c): None for c in "[]'"}).split(',')
         	targets = [word for word in mut_list if '=' in word]
@@ -108,14 +79,50 @@ class Visualizer:
         # Drop columns that dont start with mutation list strings
         mask = self.data.columns.str.startswith(tuple(flatmuts))
         mdata = self.data.loc[:, mask]
+        # Select the columns that were dropped (not part of the mask)
+        non_mut_cols = self.data.loc[:, ~mask]
+        # add back common column ID
         mdata['PATIENT_ID'] = self.data['PATIENT_ID']
         ############################
         # Melt the DataFrame to reshape it
         melted = pd.melt(mdata, id_vars=['PATIENT_ID'], var_name='category', value_name='value')
         # Split the 'type' column into two parts based on '_'
         melted[['gene', 'mutation']] = melted['category'].str.split('_', n=1, expand=True)
+        recombined_data = pd.concat([melted, non_mut_cols], axis=1)
+        return recombined_data
+
+    def _visualize_missing(self, recombined_data, save_path: Path) -> None:
+        """
+        Arguments:
+            data -- The data to visualize.
+        Returns:
+            A tuple with the training and test data sets.
+        """
+        # Create a boolean DataFrame where True is null
+        all_patient_sample_data_filtered = recombined_data.replace('', pd.NA)
+        null_values = all_patient_sample_data_filtered.isnull()
+        # Set up the matplotlib figure
+        plt.figure(figsize=(35, 8))
+        # Draw a heatmap with the boolean values and no cell labels
+        sns.heatmap(null_values, cbar=False, yticklabels=False)
+        plt.title("Heatmap of Null Values in DataFrame")
+        plt.show()
+        return plt.savefig( os.path.join(save_path , "missing_data_heatmap.png"))
+
+    def _plot_comut_variant(self, recombined_data, save_path: Path) -> None:
+        """
+        Arguments:
+            save_path -- The path to save visualization.
+        Returns:
+            An image of the comut variant plot.
+        """
+        # Read feature file
+        #feature_file = open(os.path.join(cwd , self.featurefile), "r")
+        #feature_read = feature_file.read()
+        # Add study name to feature list
+        # Split the 'type' column into two parts based on '_'
         # Select only the relevant columns
-        simplified = melted[['PATIENT_ID', 'gene', 'mutation', 'value']]
+        simplified = recombined_data[['PATIENT_ID', 'gene', 'mutation', 'value']]
         simplified['sample'] = ['sample' + str(i) for i in range(1, len(simplified) + 1)]
         dfset = simplified[['sample', 'gene', 'mutation', 'value']]
         dfset.columns = ['sample', 'category', 'value', 'counts']
@@ -142,14 +149,18 @@ class Visualizer:
         results in the specified output location."""
         # Prepare save folder
         visualization_output_dir = self._prepare_save_folder()
+        # Prepare the data
+        recombinedData = self._prepare_data()
 
         # Plot missing data.
         if "variant" in self.data.columns:
+            print("Data columns: ", self.data.columns)  
             print("\n-----Plotting COMUT and missing data heatmap----")
-            self._plot_comut_variant(visualization_output_dir)
+            self._plot_comut_variant(recombinedData, visualization_output_dir)
+            self._visualize_missing(recombinedData, visualization_output_dir)
         else:
             print("\n-----Plotting missing data heatmap----")
-            self._visualize_missing(visualization_output_dir)
+            self._visualize_missing(recombinedData, visualization_output_dir)
 
 
         print(f"\nImages saved to {visualization_output_dir}")
