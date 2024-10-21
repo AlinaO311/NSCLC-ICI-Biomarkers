@@ -12,6 +12,7 @@ import itertools
 from comut import comut
 from comut import fileparsers
 import palettable
+from datetime import datetime
 from dataloader import DataLoader
 
 cwd=os.getcwd().split('work', 1)[0]
@@ -20,18 +21,19 @@ class Visualizer:
     """Handles the interaction with the different metric and plot functionality.
 
     Public methods:
-    visualizee -- Do the analysis specified in the config tile and save the results
+    visualize -- Do the analysis specified in the config tile and save the results
             in the output directory.
 
     Instance variables:
     output_path -- Where to store the produced output.
-    dataloader -- The configured data loader.
+    mutfile -- Genes to visualize.
+    data_path -- The data that will be visualized.
     """
 
     def __init__(
         self,
-#        config_path: Path,
         output_path: Path,
+        mutfile: Optional[Path] = None,
         data_path: Optional[Path] = None,
     ) -> None:
         """Initialize the analyzer class.
@@ -43,18 +45,32 @@ class Visualizer:
             data_path -- The path to the data that should be visualized (default: {None})
         """
         self.output_path = output_path
-        self.dataloader = DataLoader(data_path, "DURABLE_CLINICAL_BENEFIT")
-        self.dataloader.load_data()
+        # Load data directly using pandas as a tab-separated file
+        if data_path is not None:
+            self.data = pd.read_csv(data_path, sep='\t')
+            print("Loaded data:", self.data.head())  # Debug print to check if data is loaded correctly
+        else:
+            self.data = None
+            print("No data path provided.")
+        # Debug print to check if data is loaded
+        print("Loaded data:", self.data)
+        self.mutfile = mutfile
 
-    def _visualize_missing(self, data, save_path: Path, output_name: str) -> None:
+    def _prepare_save_folder(self) -> Path:
+        """Prepares a folder to store plots."""
+        output_folder = os.path.join(self.output_path , "visualization"+"_"+datetime.now().strftime("%Y%m%d-%H%M"))
+        Path(output_folder).mkdir(exist_ok=True, parents=True)
+        return output_folder
+
+    def _visualize_missing(self, save_path: Path) -> None:
         """
         Arguments:
-            data -- The data to viualize.
+            data -- The data to visualize.
         Returns:
             A tuple with the training and test data sets.
         """
         # Create a boolean DataFrame where True is null
-        all_patient_sample_data_filtered = data.replace('', pd.NA)
+        all_patient_sample_data_filtered = self.data.replace('', pd.NA)
         null_values = all_patient_sample_data_filtered.isnull()
         # Set up the matplotlib figure
         plt.figure(figsize=(35, 8))
@@ -62,13 +78,12 @@ class Visualizer:
         sns.heatmap(null_values, cbar=False, yticklabels=False)
         plt.title("Heatmap of Null Values in DataFrame")
         plt.show()
-        return plt.savefig( os.path.join(save_path , output_name , ".png"))
+        return plt.savefig( os.path.join(save_path , "missing_data_heatmap.png"))
 
-    def _plot_comut_variant(self, data, mutfile, save_path: Path) -> None:
+    def _plot_comut_variant(self, save_path: Path) -> None:
         """
         Arguments:
-            data -- The data to viualize.
-            featurefile -- The features to viualize.
+            save_path -- The path to save visualization.
         Returns:
             An image of the comut variant plot.
         """
@@ -78,9 +93,9 @@ class Visualizer:
         # Add study name to feature list
        # mut_list = list(filter(None, feature_read.split("\n") )).append("STUDY_NAME")
        # load mutation collumns
-        mut_file = open(os.path.join(cwd , mutfile), "r")
-        mut_list = mut_file.read().translate({ord(c): None for c in "[]'"}).split(',')
-        targets = [word for word in mut_list if '=' in word]
+        with open(os.path.join(cwd , self.mutfile), "r") as mut_file:
+	        mut_list = mut_file.read().translate({ord(c): None for c in "[]'"}).split(',')
+        	targets = [word for word in mut_list if '=' in word]
         ls = []
         for t in targets:
             ls.append(t.split('=', 1)[0])
@@ -91,9 +106,9 @@ class Visualizer:
         # flatten list of lists
         flatmuts = list(itertools.chain.from_iterable(muts))
         # Drop columns that dont start with mutation list strings
-        mask = data.columns.str.startswith(tuple(flatmuts))
-        mdata = data.loc[:, mask]
-        mdata['PATIENT_ID'] = data['PATIENT_ID']
+        mask = self.data.columns.str.startswith(tuple(flatmuts))
+        mdata = self.data.loc[:, mask]
+        mdata['PATIENT_ID'] = self.data['PATIENT_ID']
         ############################
         # Melt the DataFrame to reshape it
         melted = pd.melt(mdata, id_vars=['PATIENT_ID'], var_name='category', value_name='value')
@@ -119,19 +134,17 @@ class Visualizer:
                                 mapping = side_mapping, xlabel = 'Mutated samples')
         toy_comut.plot_comut(figsize = (10,3))
         toy_comut.add_unified_legend()
-        return toy_comut.figure.savefig( os.path.join(save_path , "mutation_comut_clinical_bar_side" , ".png"), bbox_inches = 'tight', dpi = dpi)
+        return toy_comut.figure.savefig( os.path.join(save_path , "mutation_comut_clinical_bar_side.png"), bbox_inches = 'tight', dpi = dpi)
 
 
     def visualize(self) -> None:
         """Perfom the visualization and save the
         results in the specified output location."""
-       
         # Prepare save folder
-        visualization_output_dir = self.output_path
-        data= pd.read_csv(self.dataloader.load_data(), sep="\t", header=0, engine='python')
+        visualization_output_dir = self._prepare_save_folder()
 
         # Plot missing data.
-        if "variant" in data.columns:
+        if "variant" in self.data.columns:
             print("\n-----Plotting COMUT and missing data heatmap----")
             self._plot_comut_variant(visualization_output_dir)
         else:
@@ -140,5 +153,3 @@ class Visualizer:
 
 
         print(f"\nImages saved to {visualization_output_dir}")
-#        return analysis_output_dir
-
