@@ -78,7 +78,7 @@ class Visualizer:
         # Drop the selected columns
         df_cleaned = data.drop(columns=columns_to_drop)
         # Create a boolean DataFrame where True is null
-        all_patient_sample_data_filtered = self.data.replace('', pd.NA)
+        all_patient_sample_data_filtered = df_cleaned.replace('', pd.NA)
         null_values = all_patient_sample_data_filtered.isnull()
         # Set up the matplotlib figure
         plt.figure(figsize=(35, 8))
@@ -135,9 +135,9 @@ class Visualizer:
         side_mapping = {'Mutated samples': 'darkgrey'}
         toy_comut.add_side_bar_data(dfset, paired_name = 'Mutation type', name = 'Mutated samples', position = 'left', 
                                 mapping = side_mapping, xlabel = 'Mutated samples')
-        toy_comut.plot_comut(figsize = (10,3))
         toy_comut.add_unified_legend()
         print('here is dfset', dfset)
+        toy_comut.plot_comut(figsize = (10,3))
         return toy_comut.figure.savefig( os.path.join(save_path , "mutation_comut_clinical_bar_side.png"), bbox_inches = 'tight', dpi = dpi)
 
 
