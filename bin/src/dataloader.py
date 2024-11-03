@@ -30,7 +30,7 @@ class DataLoader:
         self.data_path = data_path
         self.gt_column = gt_column
 
-    def load_data(self) -> None:
+    def load_data(self) ->  pd.DataFrame:
         """Load data from the given data path provided at initalization."""
         print("Loading data..")
 
@@ -43,6 +43,7 @@ class DataLoader:
             return df
 
         self.data = convert_types(pd.read_csv(self.data_path))
+        return self.data
 
     def get_data(self) -> pd.DataFrame:
         """Return predictor columns as a Pandas dataframe."""
