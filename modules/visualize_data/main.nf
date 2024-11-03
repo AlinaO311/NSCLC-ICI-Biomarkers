@@ -8,6 +8,7 @@ process visualize_data {
     input:
     val data_path
     val datetime_string
+    val mutations_data
     val output_dir
     
     script:
@@ -16,14 +17,18 @@ process visualize_data {
       """
       DATE_VALUE='$datetime_string'
       export DATE_VALUE
-      PYTHONPATH=$baseDir/bin/src visualize.py --data_path ${data_path} --dir ${params.output_dir}
+      PYTHONPATH=$baseDir/bin/src visualize.py --data_path ${data_path} --mutation_data ${mutations_data} --dir ${params.output_dir} 
+
+      waterfall.R --data_path ${data_path} --mutation_data ${mutations_data}
       """
 
     else
       """
       DATE_VALUE='$datetime_string'
       export DATE_VALUE
-      PYTHONPATH=$baseDir/bin/src visualize.py  --data_path ${data_path}  --dir ${params.output_dir}
+      PYTHONPATH=$baseDir/bin/src visualize.py  --data_path ${data_path}  --mutation_data ${mutations_data} --dir ${params.output_dir}
+
+      waterfall.R --data_path ${data_path} --mutation_data ${mutations_data}
       """
 
 }
