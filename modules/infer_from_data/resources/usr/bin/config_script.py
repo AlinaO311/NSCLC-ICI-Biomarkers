@@ -78,8 +78,8 @@ if __name__ == "__main__":
                 }
             },
             {
-            output_name: "drug_administration_weeks_histogram",
-            column: "ADMINISTRATION_OF_DRUG_WEEKS",
+            output_name: "TMB_histogram",
+            column: "TMB",
             type: "continuous",
             plotargs: {
                 title: "Administration of Drug Weeks"
