@@ -9,8 +9,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
 import itertools
-from comut import comut
-from comut import fileparsers
+from comut import comut, fileparsers
 import palettable
 from datetime import datetime
 from dataloader import DataLoader
@@ -51,12 +50,10 @@ class Visualizer:
         # Load data directly using pandas as a tab-separated file
         if data_path is not None:
             self.data = pd.read_csv(data_path, sep='\t')
-            print("Loaded data:", self.data.head())  # Debug print to check if data is loaded correctly
         else:
             self.data = None
             print("No data path provided.")
         # Debug print to check if data is loaded
-        print("Loaded data:", self.data)
         self.mutfile = mutfile
 
     def _prepare_save_folder(self) -> Path:
@@ -76,14 +73,14 @@ class Visualizer:
         # Remove columns where the name contains any string from the list
         columns_to_drop = [col for col in self.data.columns if any(substring in col for substring in keywords)]
         # Drop the selected columns
-        df_cleaned = data.drop(columns=columns_to_drop)
+        df_cleaned = self.data.drop(columns=columns_to_drop)
         # Create a boolean DataFrame where True is null
         all_patient_sample_data_filtered = df_cleaned.replace('', pd.NA)
         null_values = all_patient_sample_data_filtered.isnull()
         # Set up the matplotlib figure
         plt.figure(figsize=(35, 8))
         # Draw a heatmap with the boolean values and no cell labels
-        sns.heatmap(null_values, cbar=False, yticklabels=False)
+        sns.heatmap(null_values, cbar=False, yticklabels=False, cmap='viridis')
         plt.title("Heatmap of Null Values in DataFrame")
         plt.show()
         return plt.savefig( os.path.join(save_path , "missing_data_heatmap.png"))
