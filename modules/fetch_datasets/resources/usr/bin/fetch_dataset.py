@@ -17,7 +17,11 @@ import chardet
 import math
 from collections import defaultdict
 from nltk.tokenize import word_tokenize
+import nltk
+import ssl
 
+nltk.download('wordnet')
+nltk.download('all-nltk') #Downloads all packages.  This step is optional
 
 path_list = []
 patientSets = {}
@@ -325,21 +329,14 @@ class FetchData(object):
         patient_sample_data = pd.merge(all_clinical_data, mutationMerged_dict.merge(all_mut_data.rename(columns={'TUMOR_SAMPLE_BARCODE': 'SAMPLE_ID'}), 'left') , on=['PATIENT_ID','STUDY_NAME'], how='left')
         ### fix Durable clinical benefit entries
         def map_values(val):
-            # Check if the value is NaN
+            # Return NaN if the value is NaN
             if isinstance(val, float) and math.isnan(val):
-                return float('nan')  # value to return  'NaN'
-            # Check if the value is numeric
-            if str(val).isnumeric():
-                num_val = int(val)
-                if num_val == 0:
-                    return 0
-                elif num_val == 1:
-                    return 1
-            # Check if the value starts with 'N'
-            if str(val).startswith('N'):
+                return float('nan')
+            # Return 0 if the value is 0, 0.0, or starts with 'N'
+            if val == 0 or val == 0.0 or (isinstance(val, str) and val.startswith('N')):
                 return 0
-            else:
-                return 1
+            # Return 1 for all other cases
+            return 1
         df_no_duplicates = patient_sample_data.drop_duplicates()
         df_no_duplicates['DURABLE_CLINICAL_BENEFIT'] = df_no_duplicates['DURABLE_CLINICAL_BENEFIT'].apply(map_values)
         ### fill object na with 'unknown'
