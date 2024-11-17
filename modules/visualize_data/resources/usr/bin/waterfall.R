@@ -73,10 +73,14 @@ setnames(melted, c("sample", "gene", "variant_class", "counts"))
 
 ######################### ADD clinical data
 
+# Load the required library
 library(RColorBrewer)
 
-# Generate a palette with enough colors for all mutation types
-custom_palette <- brewer.pal(n = length(unique_variant_classes), "Set3")
+# Number of unique mutation categories (you need this to match the number of colors)
+n_colors <- length(unique(melted$Mutation_Type))  # Assuming 'Mutation_Type' has the mutation categories
+
+# Generate a palette with enough colors
+custom_palette <- brewer.pal(n = n_colors, name = "Set3")
 
 # Select clinical variables to include in plot - durable clinical benefit response map to responder and non-responder
 clinicalData <- meta_tbl %>% 
@@ -110,5 +114,5 @@ clinVarOrder_map <- c(unique(clinicalData$Best_Response[order(clinicalData$Best_
 # Create waterfall plot
 #pdf(file.path(outfile,"gene_mds_plot.pdf"))
 png(outfile, height=12, width=15, units="in", res=300)
-waterfall(melted, fileType = "Custom",  variant_class_order=mutation_priority , clinData=clinicalData_2,clinVarOrder=clinVarOrder_map, clinLegCol=ncol(clinicalData)-1, section_heights=c(1,5,1), mainRecurCutoff = 0.05)
+waterfall(melted, fileType = "Custom",  variant_class_order=mutation_priority , clinData=clinicalData_2,clinVarOrder=clinVarOrder_map, clinLegCol=ncol(clinicalData)-1, section_heights=c(1,5,1), mainRecurCutoff = 0.05, mutation_palette = custom_palette)
 dev.off()
