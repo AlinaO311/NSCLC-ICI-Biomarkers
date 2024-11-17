@@ -80,8 +80,10 @@ class Visualizer:
         # Set up the matplotlib figure
         plt.figure(figsize=(35, 8))
         # Draw a heatmap with the boolean values and no cell labels
-        sns.heatmap(null_values, cbar=False, yticklabels=False, cmap='viridis')
+        sns.heatmap(null_values, cbar=False, yticklabels=False, cmap='Purples')
         plt.title("Heatmap of Null Values in DataFrame")
+        plt.xticks(rotation=45, ha='right')  # Tilt the column labels to 45 degrees
+        plt.tight_layout()
         plt.show()
         return plt.savefig( os.path.join(save_path , "missing_data_heatmap.png"))
 
