@@ -37,7 +37,11 @@ def fill_na(data):
                 data[col] = data[col].fillna('unknown')
     return data
 
+def replace_nan(column, placeholder):
+    return column.fillna(placeholder)
+
 def fix_text(s):
+    """Fix text by converting to lowercase, removing non-alphanumeric characters, and removing extra spaces."""
     if isinstance(s, str):
         # Convert to lowercase
         s = s.lower()
@@ -45,15 +49,19 @@ def fix_text(s):
         s = re.sub(r'[^a-z0-9\s]', ' ', s)
         # Remove extra spaces
         s = re.sub(r'\s+', ' ', s).strip()
+        # modify to handle Nan
+        return s
     return s
 
 def group_and_replace(allthings):
-    ###### new
+    """Group similar phrases and replace them with a single phrase."""
     # Flatten the dictionary values into a list of phrases and remove duplicates
     unique_phrases = list(set(allthings))
+    #Filter NAN values
+    unique_nonNA_phrases = [phrase for phrase in unique_phrases if isinstance(phrase, str)]
     collapsed_dict = defaultdict(list)
     # Tokenize the phrases
-    tokenized_phrases = [word_tokenize(phrase) for phrase in unique_phrases]
+    tokenized_phrases = [word_tokenize(phrase) for phrase in unique_nonNA_phrases]
     # Create a dictionary with lists of phrases starting with the same word
     for sublist in tokenized_phrases:
         collapsed_dict[sublist[0]].append(' '.join(sublist))
@@ -93,6 +101,7 @@ def group_and_replace(allthings):
 
 # Function to replace values in the DataFrame column
 def replace_with_fixed(value, fix_dict):
+    """Replace values in the DataFrame column with corrected values."""
     def find_key_by_value(fixed_value):
         for key, val in fix_dict.items():
             if (isinstance(val, str) and val == fixed_value) or (isinstance(val, list) and fixed_value in val):
@@ -111,6 +120,7 @@ def replace_with_fixed(value, fix_dict):
 
 
 def log2_normalization(x):
+    """Perform log2 normalization on the input series."""
     # Find the minimum value in the series
     min_value = x.min()
     # If the minimum value is less than or equal to zero, calculate the shift required
@@ -119,12 +129,13 @@ def log2_normalization(x):
     return np.log2(x + shift + 1)
 
 def normalize(x):
+    """Normalize the input series."""
     return (x - x.mean()) / x.std()
 
 class FetchData(object):
     def __init__(self, dataSets, mutationLists, featureFile):
         self.data = dataSets
-       	self.mutations = mutationLists
+        self.mutations = mutationLists
         self.features = featureFile
     def _get_data(self):
         for study in self.data:
@@ -152,7 +163,6 @@ class FetchData(object):
         return patientSets, sampleSets, mutSets 
     def _harmonize(self, patientSets, sampleSets, mutSets):
         # read in feature list
-        ##feature_file = open(os.path.join(cwd , 'Data/features_v1.txt'), "r") ###TODO: mod to allow user input? or allow what type specs
         feature_file = open(os.path.join(cwd , self.features), "r")
         # reading the file 
         feature_read = feature_file.read() 
@@ -174,6 +184,7 @@ class FetchData(object):
             # Create temporary lists to hold matching columns
             df.columns = df.columns.str.upper()
             tmp_list_dict = {g: [] for g in feat_list}
+            # Change response columns to match DURABLE CLINICAL BENEFIT
             if any('DURABLE' in col for col in df.columns):
             # Drop columns that contain the string 'RESPON' or 'fs_status'
                 df = df.drop(columns=[col for col in df.columns if 'RESPON' in col or 'FS_STATUS' in col])
@@ -195,7 +206,7 @@ class FetchData(object):
                         # Return an error if neither 'RESPON' nor 'FS_STATUS' are found
                         print("Error: Neither 'RESPON' nor 'FS_STATUS' found in columns")
                         patientSets.pop(df_name) 
-           # Check each column in the data frame
+           # Check each column in the data frame for matches with the feature list
             for col in df.columns:
                 for g in feat_list:
                     if 'STAGE' in g.upper() and 'STAGE' in col:
@@ -224,7 +235,7 @@ class FetchData(object):
         else:
             pass
         keep_cols = [key for key, val in result.items()]
-        #rename some dict keys
+        #add cols of interest to list of cols to keep
         if 'HGVSP' in feat_list:
             keep_cols+=['HGVSP']
         else:
@@ -279,18 +290,24 @@ class FetchData(object):
         muts = [[re.sub('\w+[=]+', '', y).strip() for y in x] for x in m_lst]
         # check if HGVSP is ,,in feature list
         if 'HGVSP' in keep_feats:
+            # Replace NaN in HGVSP with a placeholder and construct MUT_HGVSP
+            all_mut_data['HGVSP'] = replace_nan(all_mut_data['HGVSP'], 'HGVSP')
             # create concat column from HUGO_SYMBOL and HGVSP (protein mod/consequence)
             all_mut_data['MUT_HGVSP'] = all_mut_data['HUGO_SYMBOL']+'_'+all_mut_data['HGVSP']
             # Count the occurrence of each Mut/consequence for each Sample_ID
-            mutDF = pd.crosstab( all_mut_data['TUMOR_SAMPLE_BARCODE'], all_mut_data['MUT_HGVSP'], dropna=False).astype(int)
+            # Crosstab: Preserve NaN values in counts
+            mutDF = pd.crosstab(all_mut_data['TUMOR_SAMPLE_BARCODE'], all_mut_data['MUT_HGVSP']).reindex(all_mut_data['TUMOR_SAMPLE_BARCODE'], fill_value=np.nan)
+            #mutDF = pd.crosstab( all_mut_data['TUMOR_SAMPLE_BARCODE'], all_mut_data['MUT_HGVSP'], dropna=False).astype(int)
             all_mut_data.drop(['HUGO_SYMBOL','MUT_HGVSP','HGVSP'], axis=1, inplace=True)
         elif 'CONSEQUENCE'  in keep_feats:
+            # Replace NaN in CONSEQUENCE with a placeholder and construct MUT_CONSEQUENCE
+            all_mut_data['CONSEQUENCE'] = replace_nan(all_mut_data['CONSEQUENCE'], 'consequence')
             all_mut_data['MUT_CONSEQUENCE'] = all_mut_data['HUGO_SYMBOL']+'_'+all_mut_data['CONSEQUENCE']
             # Count the occurrence of each Mut/consequence for each Sample_ID
-            mutDF = pd.crosstab( all_mut_data['TUMOR_SAMPLE_BARCODE'], all_mut_data['MUT_CONSEQUENCE'], dropna=False).astype(int)
+            mutDF = pd.crosstab( all_mut_data['TUMOR_SAMPLE_BARCODE'], all_mut_data['MUT_CONSEQUENCE']).reindex(all_mut_data['TUMOR_SAMPLE_BARCODE'], fill_value=np.nan)
             all_mut_data.drop(['HUGO_SYMBOL','MUT_CONSEQUENCE','CONSEQUENCE'], axis=1, inplace=True)
         else:
-            mutDF = pd.crosstab( all_mut_data['TUMOR_SAMPLE_BARCODE'], all_mut_data['HUGO_SYMBOL'], dropna=False).astype(int)
+            mutDF = pd.crosstab( all_mut_data['TUMOR_SAMPLE_BARCODE'], all_mut_data['HUGO_SYMBOL']).reindex(all_mut_data['TUMOR_SAMPLE_BARCODE'], fill_value=np.nan)
             all_mut_data.drop('HUGO_SYMBOL', axis=1, inplace=True)
         # if count is greater than 2 set to 1, else 0
         mutDF.iloc[:,1:] = mutDF.iloc[:,1:].applymap(lambda x: x if x >= 1 else 0)
@@ -340,15 +357,15 @@ class FetchData(object):
         df_no_duplicates = patient_sample_data.drop_duplicates()
         df_no_duplicates['DURABLE_CLINICAL_BENEFIT'] = df_no_duplicates['DURABLE_CLINICAL_BENEFIT'].apply(map_values)
         ### fill object na with 'unknown'
-        repl_df=fill_na(df_no_duplicates)
-        harmonized_df = repl_df.copy()
+        #repl_df=fill_na(df_no_duplicates)
+        harmonized_df = df_no_duplicates.copy()
         # Process each string column
-        for column in repl_df.select_dtypes(include=['object']).columns:
+        for column in df_no_duplicates.select_dtypes(include=['object']).columns:
             if column not in ['PATIENT_ID', 'SAMPLE_ID', 'STUDY_NAME']:
                 new_values = []
                 # Group and replace phrases
                 if column.startswith('PDL'):
-                    for value in repl_df[column]:
+                    for value in df_no_duplicates[column]:
                         try:
                             num = float(value)
                             # Convert to float first to handle numeric strings and floats
@@ -370,9 +387,9 @@ class FetchData(object):
                             else:
                                 new_values.append(value)
                     # Assign the new values back to the column
-                    repl_df[column] = new_values
+                    df_no_duplicates[column] = new_values
                 #Step 1: Extract all words from the column
-                all_phrases = repl_df[column].tolist()
+                all_phrases = df_no_duplicates[column].tolist()
                 # Step 2: Ensure each sublist is a list of strings
                 checked_phrases = [sublist if isinstance(sublist, list) else [sublist] for sublist in all_phrases]
                 # Step 3: Flatten the values
@@ -380,7 +397,7 @@ class FetchData(object):
                 normalized_phrases = [fix_text(s) for s in flattened_phrases]
                 # Step 4: Group similar values
                 replacements = group_and_replace(normalized_phrases)
-                harmonized_df[column] = repl_df[column].apply(lambda x: replace_with_fixed(x, replacements))    
+                harmonized_df[column] = df_no_duplicates[column].apply(lambda x: replace_with_fixed(x, replacements) if not pd.isna(x) else x)    
         return harmonized_df
 
 def Harmonize(self, *args):
