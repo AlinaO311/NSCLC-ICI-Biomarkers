@@ -126,6 +126,34 @@ class Analyzer:
         print(f"Saving '{output_name}' shap tree plot...")
         plt.savefig( os.path.join(save_path, "analysis", output_name+".png"), dpi=300, bbox_inches="tight")
         plt.close()
+    
+    def _plot_scatter_plot(
+        self,
+        save_path: Path,
+        output_name: str,
+        x_column: str,
+        y_column: str,
+        color_column: str,
+        plotargs: Dict[str, Any] = {},
+    ) -> None:
+        """Create a scatter plot of two specified columns and save the result.
+
+        Arguments:
+            save_path -- The path where to save the result.
+            output_name -- The desired name of the resulting scatter plot image.
+            x_column -- The name of the column used for the x-values.
+            y_column -- The name of the column used for the y-values.
+            color_column -- A color specification.
+
+        Keyword Arguments:
+            plotargs -- Any additional arguments for the plot function.
+        """
+        data = self.dataloader.get_complete_data()
+        df = data[[x_column, y_column, color_column]]
+        scatter_plot(df.dropna(), x_column, y_column, color_column, plotargs)
+        print(f"Saving '{output_name}.png' scatter plot.")
+        plt.savefig( os.path.join(save_path, "analysis",output_name,".png"), bbox_inches="tight")
+        plt.close()
 
     def _plot_confusion_matrix(
         self,
@@ -320,7 +348,7 @@ class Analyzer:
         if "scatter_plot" in config_keys:
             print("\n-----Plotting Scatter plot.----")
             for scatter_plot in self.analysis_config["scatter_plot"]:
-                self._plot_shap(analysis_output_dir, **scatter_plot)
+                self._plot_scatter_plot(analysis_output_dir, **scatter_plot)
 
         #Create shap plots.
         if "shap_plot" in config_keys:
