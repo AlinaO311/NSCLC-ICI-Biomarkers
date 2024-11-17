@@ -1,4 +1,4 @@
-#!/usr/bin/Rscript
+#!/usr/bin/env Rscript
 rm(list=ls())
 library(dplyr)
 library(devtools)
@@ -9,10 +9,22 @@ library(tidyverse)
 library(stringr)
 library(GenVisR)
 
+
 options <- list(
   make_option(c("-i", "--data_path"),help="Dataset for building model" ),
-  make_option(c("-m", "--mutation_data"),help="File containing list of mutations"),
+  make_option(c("-m", "--mutation_data"),help="File containing list of mutations"), 
+  make_option(c("-o", "--outputdir"),help="File containing patient data"),
 )
+
+# Get the current working directory and split at 'work'
+cwd <- str_split(getwd(), "work", n = 2)[[1]][1]
+
+# Set directory path and time_val from environment variable
+time_val <- Sys.getenv("time_val")
+
+# Construct output paths
+output_path <- file.path(cwd, dir, "DataPrep")
+output_folder <- file.path(output_path, paste0("visualization_", time_val))
 
 ### Handle arguments
 
@@ -23,6 +35,7 @@ args <- parse_args(parser, positional_arguments = 0)
 opt <- args$options
 infile <- opt$data_path
 mutfile <- opt$mutation_data
+dir <- opt$outputdir
 
 # Set the current working directory and file path
 mutData <- file.path(mutfile)
@@ -30,7 +43,7 @@ mutData <- file.path(mutfile)
 set.seed(426)
 
 ###### Read patient data
-meta_tbl <- read.table(opt$infile,sep="\t",header=T)
+meta_tbl <- read.table(opt$infile, sep="\t",header=T)
 
 ###### Read mutation data and clean the list
 mut_list <- scan(mutData, what = "", sep = ",", quiet = TRUE) # Split on commas
@@ -113,6 +126,9 @@ clinVarOrder_map <- c(unique(clinicalData$Best_Response[order(clinicalData$Best_
 
 # Create waterfall plot
 #pdf(file.path(outfile,"gene_mds_plot.pdf"))
-png(outfile, height=12, width=15, units="in", res=300)
+# Specify the full path for the PDF output file
+output_file <- file.path(output_folder, "waterfall_plot.png")
+
+png(output_file, height=12, width=15, units="in", res=300)
 waterfall(melted, fileType = "Custom",  variant_class_order=mutation_priority , clinData=clinicalData_2,clinVarOrder=clinVarOrder_map, clinLegCol=ncol(clinicalData)-1, section_heights=c(1,5,1), mainRecurCutoff = 0.05, mutation_palette = custom_palette)
 dev.off()
