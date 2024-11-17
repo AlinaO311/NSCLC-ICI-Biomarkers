@@ -392,8 +392,9 @@ class FetchData(object):
                 all_phrases = df_no_duplicates[column].tolist()
                 # Step 2: Ensure each sublist is a list of strings
                 checked_phrases = [sublist if isinstance(sublist, list) else [sublist] for sublist in all_phrases]
-                # Step 3: Flatten the values
-                flattened_phrases = [item if isinstance(item, str) else ' '.join(map(str, item)) for sublist in checked_phrases for item in sublist]
+                # Step 3: Flatten the values - skip NaN values
+                # If the sublist is iterable (e.g., list), process its items - Join lists or tuples into a string, skip float/NaN   
+                flattened_phrases = [item if isinstance(item, str) else ' '.join(map(str, item)) for sublist in checked_phrases for item in sublist if not pd.isna(item)]
                 normalized_phrases = [fix_text(s) for s in flattened_phrases]
                 # Step 4: Group similar values
                 replacements = group_and_replace(normalized_phrases)
