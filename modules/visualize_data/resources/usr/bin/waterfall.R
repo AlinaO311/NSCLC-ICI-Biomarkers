@@ -5,6 +5,7 @@ library(devtools)
 library(optparse)
 library(data.table)
 library(reshape2)
+library(tidyverse)
 library(stringr)
 library(GenVisR)
 
@@ -24,8 +25,7 @@ infile <- opt$data_path
 mutfile <- opt$mutation_data
 
 # Set the current working directory and file path
-mutData <- file.path(mutfile, self$mutfile)
- dir.create(outfile)
+mutData <- file.path(mutfile)
 
 set.seed(426)
 
@@ -64,17 +64,27 @@ melted <- mdata %>%
   pivot_longer(cols = -PATIENT_ID, names_to = "category", values_to = "value") %>%
   # split category into gene and mutation columns
   separate(category, into = c("gene", "Mutation_Type"), sep = "_",  extra = "merge")  %>%
-  mutate(Mutation_Type = if_else(str_detect(Mutation_Type, "\\."), "multiple", Mutation_Type))
+  mutate(Mutation_Type = if_else(str_detect(Mutation_Type, "\\."), "multiple", Mutation_Type)) %>%
+  distinct() %>%
+  filter(value != 0)
 
 # Reorder and rename columns for the final dataset
 setnames(melted, c("sample", "gene", "variant_class", "counts"))
 
 ######################### ADD clinical data
 
+library(RColorBrewer)
+
+# Generate a palette with enough colors for all mutation types
+custom_palette <- brewer.pal(n = length(unique_variant_classes), "Set3")
+
 # Select clinical variables to include in plot - durable clinical benefit response map to responder and non-responder
 clinicalData <- meta_tbl %>% 
   select(PATIENT_ID, DURABLE_CLINICAL_BENEFIT, HISTOLOGY) %>%
-  mutate(DURABLE_CLINICAL_BENEFIT = recode(DURABLE_CLINICAL_BENEFIT, `0` = "NonResponder", `1` = "Responder"))
+  mutate(DURABLE_CLINICAL_BENEFIT = recode(DURABLE_CLINICAL_BENEFIT, `0` = "NonResponder", `1` = "Responder")) %>%
+  mutate(HISTOLOGY = ifelse(is.na(HISTOLOGY) | HISTOLOGY == "", "Unknown", HISTOLOGY))%>%
+  # Order by DURABLE_CLINICAL_BENEFIT
+  arrange(DURABLE_CLINICAL_BENEFIT)
 
 # Rename columns to match melted mut data
 colnames(clinicalData) <- c("sample", "Best_Response", "Histology")
@@ -83,7 +93,9 @@ colnames(clinicalData) <- c("sample", "Best_Response", "Histology")
 clinicalData_2 <- melt(data=clinicalData, id.vars=c("sample"))
 
 # Create a separate data frame for mutation burden
-mutationBurden <- meta_tbl %>% select(PATIENT_ID, TMB)
+mutationBurden <- meta_tbl %>% select(PATIENT_ID, TMB) %>%
+  filter(PATIENT_ID %in% melted$sample)
+
 colnames(mutationBurden) <- c("sample", "TMB")
 
 # find which samples are not in the mutationBurden data frame
@@ -93,16 +105,10 @@ sampleVec[!sampleVec %in% clinicalData_2$sample]
 # Create a vector to save mutation priority order for plotting
 mutation_priority <- as.character(unique(melted$variant_class))
 
+clinVarOrder_map <- c(unique(clinicalData$Best_Response[order(clinicalData$Best_Response)]), unique(clinicalData$Histology[order(clinicalData$Histology)]))
+
 # Create waterfall plot
-plot <- waterfall(melted, fileType = "Custom", 
-variant_class_order=mutation_priority,
-mutBurden=mutationBurden, 
-clinData=clinicalData_2, clinLegCol=3,  
-section_heights=c(1, 5, 1), mainRecurCutoff = 0.05, maxGenes = 20)
-
-
-####### Crete waterfall plot image
 #pdf(file.path(outfile,"gene_mds_plot.pdf"))
-pdf("gene_mds_plot.pdf", height=10, width=15)
-waterfall(melted, fileType = "Custom", variant_class_order=mutation_priority,clinData=clinicalData_2, clinLegCol=3, section_heights=c(1,5,1), mainRecurCutoff = 0.05, maxGenes = 20)
+png(outfile, height=12, width=15, units="in", res=300)
+waterfall(melted, fileType = "Custom",  variant_class_order=mutation_priority , clinData=clinicalData_2,clinVarOrder=clinVarOrder_map, clinLegCol=ncol(clinicalData)-1, section_heights=c(1,5,1), mainRecurCutoff = 0.05)
 dev.off()
