@@ -147,6 +147,7 @@ def shap_tree_explainer(
         X_test[f'{category}'] = X_data[columns].sum(axis=1)
 
     shap_values = shap.TreeExplainer(model).shap_values(X_data)
+    plt.figure()
     shap.summary_plot(shap_values, X_data, show=False)
 
 

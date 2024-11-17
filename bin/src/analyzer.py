@@ -184,6 +184,7 @@ class Analyzer:
         stacked_bar_plot(data, plotargs)
         print(f"Saving '{output_name}.png' stacked bar plot.")
         plt.savefig( os.path.join(save_path, "analysis", output_name+".png"), bbox_inches="tight")
+        plt.close()
 
     def _plot_histogram(
         self,
@@ -209,6 +210,7 @@ class Analyzer:
         histogram(data[column].dropna(), type, plotargs)
         print(f"Saving '{output_name}.png' histogram.")
         plt.savefig( os.path.join(save_path,"analysis", output_name+".png"), bbox_inches="tight")
+        plt.close()
 
 
     def _tsne_2d(
@@ -236,6 +238,7 @@ class Analyzer:
 
         print(f"Saving '{output_name}' tnse 2d plot...")
         plt.savefig( os.path.join(save_path, "analysis", output_name+".png"), bbox_inches="tight")
+        plt.close()
 
 
     def _prepare_save_folder(self) -> Path:
@@ -312,6 +315,12 @@ class Analyzer:
             print("\n-----Plotting stacked bar plots.----")
             for stacked_bar in self.analysis_config["stacked_bar_plot"]:
                 self._plot_stacked_bar_plot(analysis_output_dir, **stacked_bar)
+        
+        #Create scatter plots.
+        if "scatter_plot" in config_keys:
+            print("\n-----Plotting Scatter plot.----")
+            for scatter_plot in self.analysis_config["scatter_plot"]:
+                self._plot_shap(analysis_output_dir, **scatter_plot)
 
         #Create shap plots.
         if "shap_plot" in config_keys:
