@@ -290,7 +290,7 @@ class FetchData(object):
         # check if HGVSP is ,,in feature list
         if 'HGVSP' in keep_feats:
             # Replace NaN in HGVSP with a placeholder and construct MUT_HGVSP
-            all_mut_data['HGVSP'] = replace_nan(all_mut_data['HGVSP'], 'HGVSP')
+            all_mut_data['HGVSP'] = replace_nan(all_mut_data['HGVSP'], 'unknown')
             # create concat column from HUGO_SYMBOL and HGVSP (protein mod/consequence)
             all_mut_data['MUT_HGVSP'] = all_mut_data['HUGO_SYMBOL']+'_'+all_mut_data['HGVSP']
             # Count the occurrence of each Mut/consequence for each Sample_ID
@@ -300,7 +300,7 @@ class FetchData(object):
             all_mut_data.drop(['HUGO_SYMBOL','MUT_HGVSP','HGVSP'], axis=1, inplace=True)
         elif 'CONSEQUENCE'  in keep_feats:
             # Replace NaN in CONSEQUENCE with a placeholder and construct MUT_CONSEQUENCE
-            all_mut_data['CONSEQUENCE'] = replace_nan(all_mut_data['CONSEQUENCE'], 'consequence')
+            all_mut_data['CONSEQUENCE'] = replace_nan(all_mut_data['CONSEQUENCE'], 'unknown')
             all_mut_data['MUT_CONSEQUENCE'] = all_mut_data['HUGO_SYMBOL']+'_'+all_mut_data['CONSEQUENCE']
             # Count the occurrence of each Mut/consequence for each Sample_ID
             mutDF = pd.crosstab( all_mut_data['TUMOR_SAMPLE_BARCODE'], all_mut_data['MUT_CONSEQUENCE']).reindex(all_mut_data['TUMOR_SAMPLE_BARCODE'], fill_value=np.nan)
