@@ -150,22 +150,40 @@ class Analyzer:
             plotargs -- Any additional arguments for the plot function.
         """
         data = self.dataloader.get_complete_data()
-        pred_data = data.drop(columns=["predicted", "predicted_labels", "ground_truth_labels"])
+        gt_col = self.dataloader.get_ground_truth()
+        pred_data = data.drop(columns=["predicted_labels"])
+        # Create a regex pattern to match the prefixes
+        regex_pattern = f"^({x_column}|{y_column}|{color_column})"
+        # Filter columns based on the pattern
+        filt_data = pred_data.filter(regex=regex_pattern, axis=1)
         groups = defaultdict(list)
-        one_hot_cols = pred_data.columns[(pred_data.isin([0, 1]).all())]
+        one_hot_cols = filt_data.columns[(filt_data.isin([0, 1]).all())]
+        # Exclude gt_col if it is present in one_hot_cols
+        if gt_col.name == color_column:
+            one_hot_cols = one_hot_cols.drop(gt_col.name)
+        print('One hot encoded columns:', one_hot_cols)
         for col in one_hot_cols:
             prefix = col.split('_')[0]
             groups[prefix].append(col)
-        # Step 2: Create a copy of X_data to X_test
-        X_test = pred_data.copy()
-        # Step 3: Drop the one-hot encoded columns from X_test
+        # Create a copy of pred_data to X_test
+        X_test = filt_data.copy()
+        # Drop the one-hot encoded columns from X_test
         X_test.drop(columns=one_hot_cols, inplace=True)
+        # Add summed columns based on groups
         for category, columns in groups.items():
-            X_test[f'{category}'] = pred_data[columns].sum(axis=1)
-        df = X_test[[x_column, y_column, color_column]]
-        scatter_plot(df.dropna(), x_column, y_column, color_column, plotargs)
+            X_test[f'{category}'] = filt_data[columns].sum(axis=1)
+        if gt_col.name == color_column:
+        # Subset the columns based on matching column names
+            select_cols = [X_test.columns.to_list()[0], X_test.columns.to_list()[1], color_column]
+        else:
+            select_cols = [X_test.columns.to_list()[0], X_test.columns.to_list()[1], color_column]
+        print('Selected columns:', select_cols)
+        x_data = X_test[select_cols]
+        # Create the scatter plot for the current configuration
+        scatter_plot(x_data.dropna(), select_cols[0], select_cols[1], select_cols[2], plotargs)
+        # Save the plot with the specified output_name
         print(f"Saving '{output_name}.png' scatter plot.")
-        plt.savefig( os.path.join(save_path, "analysis",output_name,".png"), bbox_inches="tight")
+        plt.savefig( os.path.join(save_path, "analysis",output_name+".png"), bbox_inches="tight")
         plt.close()
 
     def _plot_confusion_matrix(
@@ -247,7 +265,6 @@ class Analyzer:
             plotargs -- Any additional kwargs to the plot function.
         """
         data = self.dataloader.get_complete_data()
-        print("histogram data demo: ", data.head())
         histogram(data[column].dropna(), type, plotargs)
         print(f"Saving '{output_name}.png' histogram.")
         plt.savefig( os.path.join(save_path,"analysis", output_name+".png"), bbox_inches="tight")
@@ -358,10 +375,10 @@ class Analyzer:
                 self._plot_stacked_bar_plot(analysis_output_dir, **stacked_bar)
         
         #Create scatter plots.
-        if "scatter_plot" in config_keys:
-            print("\n-----Plotting Scatter plot.----")
-            for scatter_plot in self.analysis_config["scatter_plot"]:
-                self._plot_scatter_plot(analysis_output_dir, **scatter_plot)
+#        if "scatter_plot" in config_keys:
+ #           print("\n-----Plotting Scatter plot.----")
+  #          for scatter_plot in self.analysis_config["scatter_plot"]:
+   #             self._plot_scatter_plot(analysis_output_dir, **scatter_plot)
 
         #Create shap plots.
         if "shap_plot" in config_keys:
