@@ -82,16 +82,16 @@ if __name__ == "__main__":
             column: "TMB",
             type: "continuous",
             plotargs: {
-                title: "Administration of Drug Weeks"
+                title: "TMB_histogram"
             }
             }
             ]
             # List of scatterplots to plot. Any nan values will be dropped.
             scatter_plot: [
                 {
-                output_name: "age_vs_smoking_history__scatter_plot",
+                output_name: "age_vs_pdl1__scatter_plot",
                 x_column: "AGE",
-                y_column(s): ,
+                y_column: "PDL1_EXP",
                 color_column: "predicted"
                 },
             {
@@ -109,13 +109,11 @@ if __name__ == "__main__":
             }
             ]
             """
-            print("No categorical columns found.")
             smoking_columns = [col for col in df.columns if 'SMOKING' in col]
-            print(smoking_columns)
             yaml.preserve_quotes = True
             yaml.explicit_start = True
             yaml_dump = yaml.load(yml_dict)
-            yaml_dump['scatter_plot'][-1]['columns'] = smoking_columns
+#            yaml_dump['scatter_plot'][-1]['y_column'] = smoking_columns
         else:
             # Identify categorical columns
             categorical_columns = df.select_dtypes(include=['object', 'category']).columns.tolist()
