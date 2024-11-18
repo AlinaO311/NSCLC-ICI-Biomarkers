@@ -49,7 +49,7 @@ class Visualizer:
         self.output_path = output_path
         # Load data directly using pandas as a tab-separated file
         if data_path is not None:
-            self.data = pd.read_csv(data_path, sep='\t')
+            self.data = pd.read_csv(data_path, delimiter='\t')
         else:
             self.data = None
             print("No data path provided.")
