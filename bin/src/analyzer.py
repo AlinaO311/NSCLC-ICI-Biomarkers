@@ -2,7 +2,7 @@
 
 import os
 import json
-import defaultdict
+from collections import defaultdict
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 import numpy as np
