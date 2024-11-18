@@ -2,6 +2,7 @@
 
 import os
 import json
+import defaultdict
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 import numpy as np
@@ -149,7 +150,19 @@ class Analyzer:
             plotargs -- Any additional arguments for the plot function.
         """
         data = self.dataloader.get_complete_data()
-        df = data[[x_column, y_column, color_column]]
+        pred_data = data.drop(columns=["predicted", "predicted_labels", "ground_truth_labels"])
+        groups = defaultdict(list)
+        one_hot_cols = pred_data.columns[(pred_data.isin([0, 1]).all())]
+        for col in one_hot_cols:
+            prefix = col.split('_')[0]
+            groups[prefix].append(col)
+        # Step 2: Create a copy of X_data to X_test
+        X_test = pred_data.copy()
+        # Step 3: Drop the one-hot encoded columns from X_test
+        X_test.drop(columns=one_hot_cols, inplace=True)
+        for category, columns in groups.items():
+            X_test[f'{category}'] = pred_data[columns].sum(axis=1)
+        df = X_test[[x_column, y_column, color_column]]
         scatter_plot(df.dropna(), x_column, y_column, color_column, plotargs)
         print(f"Saving '{output_name}.png' scatter plot.")
         plt.savefig( os.path.join(save_path, "analysis",output_name,".png"), bbox_inches="tight")
