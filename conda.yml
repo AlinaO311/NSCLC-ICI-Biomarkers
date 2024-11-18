@@ -2,8 +2,17 @@
 name: nsclc-ici-biomarkers
 channels:
   - defaults
+  - conda-forge
 dependencies:
   - python=3.9
+  - r-base==4.1
+  - r-tidyverse
+  - r-devtools
+  - r-dplyr
+  - r-optparse
+  - r-data.table
+  - r-stringr
+  - bioconductor-genvisr>=1.20.0
   - matplotlib==3.5.2
   - numpy==1.22.4
   - pandas==1.4.2
