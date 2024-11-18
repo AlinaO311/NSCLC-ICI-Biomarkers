@@ -30,13 +30,6 @@ mutSets = {}
 file_inlist = ['data_clinical_patient.txt','data_clinical_sample.txt','data_mutations.txt']
 cwd=os.getcwd().split('work', 1)[0]
 
-def fill_na(data):
-    for col in data.columns:
-        if data[col].isna().any():
-            if data[col].dtype == "O":  # Object type (categorical)
-                data[col] = data[col].fillna('unknown')
-    return data
-
 def replace_nan(column, placeholder):
     return column.fillna(placeholder)
 
@@ -75,7 +68,13 @@ def group_and_replace(allthings):
         merged_values = collapsed_dict[key]
         for other_key in list(collapsed_dict.keys()):
             # Merge values if the first letters of the keys are the same
-            if other_key != key and other_key[:1] == key[:1]:
+            # Check if keys are similar (substring-based seeding logic)
+            if other_key in key or key in other_key:
+                merged_values.extend(collapsed_dict[other_key])
+                seen_keys.add(other_key)
+                if len(other_key) > len(merged_key):
+                    merged_key = other_key
+            elif other_key != key and other_key[:1] == key[:1]:
                 merged_values.extend(collapsed_dict[other_key])
                 seen_keys.add(other_key)
                 # Choose the longest key as the merged_key
@@ -363,7 +362,7 @@ class FetchData(object):
         for column in df_no_duplicates.select_dtypes(include=['object']).columns:
             if column not in ['PATIENT_ID', 'SAMPLE_ID', 'STUDY_NAME']:
                 new_values = []
-                # Group and replace phrases
+                # Group and replace phrases for PDL1 column
                 if column.startswith('PDL'):
                     for value in df_no_duplicates[column]:
                         try:
