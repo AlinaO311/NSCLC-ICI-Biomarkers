@@ -132,5 +132,5 @@ clinVarOrder_map <- c(unique(clinicalData$Best_Response[order(clinicalData$Best_
 output_file <- file.path(output_folder, "waterfall_plot.png")
 
 png(output_file, height=12, width=15, units="in", res=300)
-waterfall(melted, fileType = "Custom",  variant_class_order=mutation_priority , clinData=clinicalData_2,clinVarOrder=clinVarOrder_map, clinLegCol=ncol(clinicalData)-1, section_heights=c(1,5,2), mainRecurCutoff = 0.05,   mainPalette=mutationColours)
+waterfall(melted, fileType = "Custom",  variant_class_order=mutation_priority , clinData=clinicalData_2,clinVarOrder=clinVarOrder_map, clinLegCol=ncol(clinicalData)-1, section_heights=c(1,5,2), mainRecurCutoff = 0.05)
 dev.off()
