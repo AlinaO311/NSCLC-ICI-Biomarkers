@@ -88,18 +88,6 @@ if __name__ == "__main__":
             ]
             # List of scatterplots to plot. Any nan values will be dropped.
             scatter_plot: [
-                {
-                output_name: "age_vs_pdl1__scatter_plot",
-                x_column: "AGE",
-                y_column: "PDL1_EXP",
-                color_column: "predicted"
-                },
-            {
-            output_name: "PDL1_EXP_vs_TMB_norm_log2_scatter_plot",
-            x_column: "PDL1_EXP", # for now changed to PDL1_EXP from MSI (what is MSI from ?)
-            y_column: "TMB_norm_log2",
-            color_column: "DURABLE_CLINICAL_BENEFIT"
-            },
             {
             output_name: "Diagnosis_Age_vs_TMB_norm_log2_scatter_plot",
             x_column: "AGE",
@@ -165,12 +153,6 @@ if __name__ == "__main__":
             ]
             # List of scatterplots to plot. Any nan values will be dropped.
             scatter_plot: [
-                {
-                output_name: "age_vs_smoking_history__scatter_plot",
-                x_column: "AGE",
-                y_column: "SMOKING_HISTORY",
-                color_column: "predicted"
-                },
             {
             output_name: "PDL1_EXP_vs_TMB_norm_log2_scatter_plot",
             x_column: "PDL1_EXP", # for now changed to PDL1_EXP from MSI (what is MSI from ?)
