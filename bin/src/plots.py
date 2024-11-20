@@ -132,19 +132,20 @@ def shap_tree_explainer(
     Returns:
         The resulting plot as a seaborn facet grid.
     """
-    groups = defaultdict(list)
-    one_hot_cols = X_data.columns[(X_data.isin([0, 1]).all())]
-    for col in one_hot_cols:
-        prefix = col.split('_')[0]
-        groups[prefix].append(col)
+    #groups = defaultdict(list)
 
-    # Step 2: Create a copy of X_data to X_test
-    X_test = X_data.copy()
+#    one_hot_cols = X_data.columns[(X_data.isin([0, 1]).all())]
+ #   for col in one_hot_cols:
+  #      prefix = col.split('_')[0]
+   #     groups[prefix].append(col)
+
+#    # Step 2: Create a copy of X_data to X_test
+ #   X_test = X_data.copy()
     # Step 3: Drop the one-hot encoded columns from X_test
-    X_test.drop(columns=one_hot_cols, inplace=True)
+  #  X_test.drop(columns=one_hot_cols, inplace=True)
 
-    for category, columns in groups.items():
-        X_test[f'{category}'] = X_data[columns].sum(axis=1)
+   # for category, columns in groups.items():
+    #    X_test[f'{category}'] = X_data[columns].sum(axis=1)
 
     shap_values = shap.TreeExplainer(model).shap_values(X_data)
     plt.figure()
