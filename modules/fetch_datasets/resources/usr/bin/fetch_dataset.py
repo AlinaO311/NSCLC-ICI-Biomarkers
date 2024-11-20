@@ -357,6 +357,8 @@ class FetchData(object):
         df_no_duplicates['DURABLE_CLINICAL_BENEFIT'] = df_no_duplicates['DURABLE_CLINICAL_BENEFIT'].apply(map_values)
         ### fill object na with 'unknown'
         #repl_df=fill_na(df_no_duplicates)
+        # Replace spaces with underscores in all values
+        df_no_duplicates = df_no_duplicates.replace(' ', '_', regex=True)      
         harmonized_df = df_no_duplicates.copy()
         # Process each string column
         for column in df_no_duplicates.select_dtypes(include=['object']).columns:
