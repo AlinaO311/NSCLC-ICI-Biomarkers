@@ -125,6 +125,17 @@ workflow {
     }
     // otherwise load input files: need DataPrep/*.tsv & config
     else {
+        // Load the most recent harmonized data file
+        def dirPath = "${params.output_dir}/Data_Prep/"
+        most_recent_file_channel = Channel.value(dirPath)
+            .map { path ->
+                findMostRecentFile(path).first() // Capture the output
+            }
+        
+        // Convert the most recent file to a channel
+        ch_data = most_recent_file_channel.map { file ->
+            Channel.fromPath(file)
+        }
         ch_preproc_config = Channel.fromPath("${params.output_dir}/configs/preprocess/*.yml")
     }
    
