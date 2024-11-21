@@ -291,6 +291,8 @@ class FetchData(object):
         if 'HGVSP' in keep_feats:
             # Replace NaN in HGVSP with a placeholder and construct MUT_HGVSP
             all_mut_data['HGVSP'] = replace_nan(all_mut_data['HGVSP'], 'unknown')
+            # group and replace values in HGVSP
+
             # create concat column from HUGO_SYMBOL and HGVSP (protein mod/consequence)
             all_mut_data['MUT_HGVSP'] = all_mut_data['HUGO_SYMBOL']+'_'+all_mut_data['HGVSP']
             # Count the occurrence of each Mut/consequence for each Sample_ID
@@ -301,10 +303,27 @@ class FetchData(object):
         elif 'CONSEQUENCE'  in keep_feats:
             # Replace NaN in CONSEQUENCE with a placeholder and construct MUT_CONSEQUENCE
             all_mut_data['CONSEQUENCE'] = replace_nan(all_mut_data['CONSEQUENCE'], 'unknown')
-            all_mut_data['MUT_CONSEQUENCE'] = all_mut_data['HUGO_SYMBOL']+'_'+all_mut_data['CONSEQUENCE']
+            # group and replace values in CONSEQUENCE
+            all_mut_data_cp = all_mut_data.copy()
+            # Process each string column
+            for column in all_mut_data.select_dtypes(include=['object']).columns:
+                if column not in ['PATIENT_ID', 'TUMOR_SAMPLE_BARCODE', 'STUDY_NAME']:
+                    new_values = []
+                    #Step 1: Extract all words from the column
+                    all_phrases = all_mut_data[column].tolist()
+                    # Step 2: Ensure each sublist is a list of strings
+                    checked_phrases = [sublist if isinstance(sublist, list) else [sublist] for sublist in all_phrases]
+                    # Step 3: Flatten the values - skip NaN values
+                    # If the sublist is iterable (e.g., list), process its items - Join lists or tuples into a string, skip float/NaN   
+                    flattened_phrases = [item if isinstance(item, str) else ' '.join(map(str, item)) for sublist in checked_phrases for item in sublist if not pd.isna(item)]
+                    normalized_phrases = [fix_text(s) for s in flattened_phrases]
+                    # Step 4: Group similar values
+                    replacements = group_and_replace(normalized_phrases)
+                    all_mut_data_cp[column] = df_no_duplicates[column].apply(lambda x: replace_with_fixed(x, replacements) if not pd.isna(x) else x)  
+            all_mut_data_cp['MUT_CONSEQUENCE'] = all_mut_data_cp['HUGO_SYMBOL']+'_'+all_mut_data_cp['CONSEQUENCE']
             # Count the occurrence of each Mut/consequence for each Sample_ID
-            mutDF = pd.crosstab( all_mut_data['TUMOR_SAMPLE_BARCODE'], all_mut_data['MUT_CONSEQUENCE']).reindex(all_mut_data['TUMOR_SAMPLE_BARCODE'], fill_value=np.nan)
-            all_mut_data.drop(['HUGO_SYMBOL','MUT_CONSEQUENCE','CONSEQUENCE'], axis=1, inplace=True)
+            mutDF = pd.crosstab( all_mut_data_cp['TUMOR_SAMPLE_BARCODE'], all_mut_data_cp['MUT_CONSEQUENCE']).reindex(all_mut_data_cp['TUMOR_SAMPLE_BARCODE'], fill_value=np.nan)
+            all_mut_data_cp.drop(['HUGO_SYMBOL','MUT_CONSEQUENCE','CONSEQUENCE'], axis=1, inplace=True)
         else:
             mutDF = pd.crosstab( all_mut_data['TUMOR_SAMPLE_BARCODE'], all_mut_data['HUGO_SYMBOL']).reindex(all_mut_data['TUMOR_SAMPLE_BARCODE'], fill_value=np.nan)
             all_mut_data.drop('HUGO_SYMBOL', axis=1, inplace=True)
@@ -342,6 +361,12 @@ class FetchData(object):
         all_clinical_data.drop_duplicates(inplace=True)
         mutationMerged_dict.drop_duplicates(inplace=True)
         all_mut_data.drop_duplicates(inplace=True)
+        # Replace spaces with underscores in all values
+        all_clinical_data = all_mut_data.replace(' ', '_', regex=True)
+        # Replace spaces with underscores in all values
+        mutationMerged_dict = all_mut_data.replace(' ', '_', regex=True)
+        # Replace spaces with underscores in all values
+        all_mut_data = all_mut_data.replace(' ', '_', regex=True)
         patient_sample_data = pd.merge(all_clinical_data, mutationMerged_dict.merge(all_mut_data.rename(columns={'TUMOR_SAMPLE_BARCODE': 'SAMPLE_ID'}), 'left') , on=['PATIENT_ID','STUDY_NAME'], how='left')
         ### fix Durable clinical benefit entries
         def map_values(val):
