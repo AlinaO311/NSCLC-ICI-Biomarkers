@@ -300,6 +300,7 @@ class FetchData(object):
             mutDF = pd.crosstab(all_mut_data['TUMOR_SAMPLE_BARCODE'], all_mut_data['MUT_HGVSP']).reindex(all_mut_data['TUMOR_SAMPLE_BARCODE'], fill_value=np.nan)
             #mutDF = pd.crosstab( all_mut_data['TUMOR_SAMPLE_BARCODE'], all_mut_data['MUT_HGVSP'], dropna=False).astype(int)
             all_mut_data.drop(['HUGO_SYMBOL','MUT_HGVSP','HGVSP'], axis=1, inplace=True)
+            all_mut_data_cp = all_mut_data.drop_duplicates(inplace=False)
         elif 'CONSEQUENCE'  in keep_feats:
             # Replace NaN in CONSEQUENCE with a placeholder and construct MUT_CONSEQUENCE
             all_mut_data['CONSEQUENCE'] = replace_nan(all_mut_data['CONSEQUENCE'], 'unknown')
@@ -319,14 +320,16 @@ class FetchData(object):
                     normalized_phrases = [fix_text(s) for s in flattened_phrases]
                     # Step 4: Group similar values
                     replacements = group_and_replace(normalized_phrases)
-                    all_mut_data_cp[column] = df_no_duplicates[column].apply(lambda x: replace_with_fixed(x, replacements) if not pd.isna(x) else x)  
+                    all_mut_data_cp[column] = all_mut_data[column].apply(lambda x: replace_with_fixed(x, replacements) if not pd.isna(x) else x)  
             all_mut_data_cp['MUT_CONSEQUENCE'] = all_mut_data_cp['HUGO_SYMBOL']+'_'+all_mut_data_cp['CONSEQUENCE']
             # Count the occurrence of each Mut/consequence for each Sample_ID
             mutDF = pd.crosstab( all_mut_data_cp['TUMOR_SAMPLE_BARCODE'], all_mut_data_cp['MUT_CONSEQUENCE']).reindex(all_mut_data_cp['TUMOR_SAMPLE_BARCODE'], fill_value=np.nan)
             all_mut_data_cp.drop(['HUGO_SYMBOL','MUT_CONSEQUENCE','CONSEQUENCE'], axis=1, inplace=True)
+            all_mut_data_cp.drop_duplicates(inplace=True)
         else:
             mutDF = pd.crosstab( all_mut_data['TUMOR_SAMPLE_BARCODE'], all_mut_data['HUGO_SYMBOL']).reindex(all_mut_data['TUMOR_SAMPLE_BARCODE'], fill_value=np.nan)
             all_mut_data.drop('HUGO_SYMBOL', axis=1, inplace=True)
+            all_mut_data_cp = all_mut_data.drop_duplicates(inplace=False)
         # if count is greater than 2 set to 1, else 0
         mutDF.iloc[:,1:] = mutDF.iloc[:,1:].applymap(lambda x: x if x >= 1 else 0)
         # Try dropping columns with NaN values in the column names first
@@ -360,14 +363,13 @@ class FetchData(object):
         # Combine all data:
         all_clinical_data.drop_duplicates(inplace=True)
         mutationMerged_dict.drop_duplicates(inplace=True)
-        all_mut_data.drop_duplicates(inplace=True)
         # Replace spaces with underscores in all values
-        all_clinical_data = all_mut_data.replace(' ', '_', regex=True)
+        all_clinical_data = all_clinical_data.replace(' ', '_', regex=True)
         # Replace spaces with underscores in all values
-        mutationMerged_dict = all_mut_data.replace(' ', '_', regex=True)
+        mutationMerged_dict = mutationMerged_dict.replace(' ', '_', regex=True)
         # Replace spaces with underscores in all values
-        all_mut_data = all_mut_data.replace(' ', '_', regex=True)
-        patient_sample_data = pd.merge(all_clinical_data, mutationMerged_dict.merge(all_mut_data.rename(columns={'TUMOR_SAMPLE_BARCODE': 'SAMPLE_ID'}), 'left') , on=['PATIENT_ID','STUDY_NAME'], how='left')
+        all_mut_data_cp = all_mut_data_cp.replace(' ', '_', regex=True)
+        patient_sample_data = pd.merge(all_clinical_data, mutationMerged_dict.merge(all_mut_data_cp.rename(columns={'TUMOR_SAMPLE_BARCODE': 'SAMPLE_ID'}), 'left') , on=['PATIENT_ID','STUDY_NAME'], how='left')
         ### fix Durable clinical benefit entries
         def map_values(val):
             # Return NaN if the value is NaN
@@ -380,8 +382,6 @@ class FetchData(object):
             return 1
         df_no_duplicates = patient_sample_data.drop_duplicates()
         df_no_duplicates['DURABLE_CLINICAL_BENEFIT'] = df_no_duplicates['DURABLE_CLINICAL_BENEFIT'].apply(map_values)
-        ### fill object na with 'unknown'
-        #repl_df=fill_na(df_no_duplicates)
         # Replace spaces with underscores in all values
         df_no_duplicates = df_no_duplicates.replace(' ', '_', regex=True)      
         harmonized_df = df_no_duplicates.copy()
