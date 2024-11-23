@@ -58,24 +58,32 @@ def group_and_replace(allthings):
     # Create a dictionary with lists of phrases starting with the same word
     for sublist in tokenized_phrases:
         collapsed_dict[sublist[0]].append(' '.join(sublist))
+    # Replace spaces with underscores and choose the longest value as the key
+    updated_dict = {}
+    for key, values in collapsed_dict.items():
+        # Replace spaces with underscores in values
+        values_with_underscores = [value.replace(' ', '_') for value in values]
+        # Find the longest value by character count
+        longest_value = max(values_with_underscores, key=len)
+        updated_dict[longest_value] = values_with_underscores
     # Remove empty lists and convert keys to int or float if possible
     merged_dict = defaultdict(list)
     seen_keys = set()
-    for key in list(collapsed_dict.keys()):
+    for key in list(updated_dict.keys()):
         if key in seen_keys:
             continue
         merged_key = key
-        merged_values = collapsed_dict[key]
-        for other_key in list(collapsed_dict.keys()):
+        merged_values = updated_dict[key]
+        for other_key in list(updated_dict.keys()):
             # Merge values if the first letters of the keys are the same
             # Check if keys are similar (substring-based seeding logic)
             if other_key in key or key in other_key:
-                merged_values.extend(collapsed_dict[other_key])
+                merged_values.extend(updated_dict[other_key])
                 seen_keys.add(other_key)
                 if len(other_key) > len(merged_key):
                     merged_key = other_key
             elif other_key != key and other_key[:1] == key[:1]:
-                merged_values.extend(collapsed_dict[other_key])
+                merged_values.extend(updated_dict[other_key])
                 seen_keys.add(other_key)
                 # Choose the longest key as the merged_key
                 if len(other_key) > len(merged_key):
