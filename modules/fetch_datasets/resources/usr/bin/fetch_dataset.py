@@ -23,6 +23,7 @@ import ssl
 nltk.download('wordnet')
 nltk.download('all-nltk') #Downloads all packages.  This step is optional
 
+
 path_list = []
 patientSets = {}
 sampleSets = {}
@@ -45,6 +46,37 @@ def fix_text(s):
         # modify to handle Nan
         return s
     return s
+
+def group_by_seed(words):
+    """
+    Group phrases based on seed matching after removing spaces/underscores.
+
+    Args:
+        words (list): List of phrases to group.
+
+    Returns:
+        dict: Dictionary with longest phrase as the key for each group.
+    """
+    # Preprocess the words: remove spaces and underscores
+    normalized = {word: word.replace("_", "").replace(" ", "") for word in words}
+    # Initialize the grouping dictionary
+    grouped = defaultdict(list)
+    # Group words where one is a seed of another
+    for word, norm_word in normalized.items():
+        matched = False
+        for key in grouped:
+            if norm_word in normalized[key] or normalized[key] in norm_word:
+                grouped[key].append(word)
+                matched = True
+                break
+        if not matched:
+            grouped[word].append(word)
+    # Replace keys with the longest word in each group
+    final_grouped = {}
+    for key, group in grouped.items():
+        longest_word = max(group, key=len)
+        final_grouped[longest_word] = group
+    return final_grouped
 
 def group_and_replace(allthings):
     """Group similar phrases and replace them with a single phrase."""
@@ -312,17 +344,18 @@ class FetchData(object):
             # Replace NaN in CONSEQUENCE with a placeholder and construct MUT_CONSEQUENCE
             all_mut_data['CONSEQUENCE'] = replace_nan(all_mut_data['CONSEQUENCE'], 'unknown')
             # group and replace values in CONSEQUENCE
+            all_mut_data = all_mut_data.replace(r'lost', 'loss', regex=True)
             all_mut_data_cp = all_mut_data.copy()
             #Step 1: Extract all words from the column
             all_phrases = all_mut_data['CONSEQUENCE'].tolist()
             # Step 2: Ensure each sublist is a list of strings
             checked_phrases = [sublist if isinstance(sublist, list) else [sublist] for sublist in all_phrases]
+            repl_mult = [['multiple' if isinstance(item, str) and ',' in item else item for item in sublist] for sublist in checked_phrases]
             # Step 3: Flatten the values - skip NaN values
             # If the sublist is iterable (e.g., list), process its items - Join lists or tuples into a string, skip float/NaN   
-            flattened_phrases = [item if isinstance(item, str) else ' '.join(map(str, item)) for sublist in checked_phrases for item in sublist if not pd.isna(item)]
-            normalized_phrases = [fix_text(s) for s in flattened_phrases]
+            flattened_phrases = [item if isinstance(item, str) else ' '.join(map(str, item)) for sublist in repl_mult for item in sublist if not pd.isna(item)]
             # Step 4: Group similar values
-            replacements = group_and_replace(normalized_phrases)
+            replacements = group_by_seed(flattened_phrases)
             all_mut_data_cp['CONSEQUENCE'] = all_mut_data_cp['CONSEQUENCE'].apply(lambda x: replace_with_fixed(x, replacements) if not pd.isna(x) else x)  
             all_mut_data_cp['MUT_CONSEQUENCE'] = all_mut_data_cp['HUGO_SYMBOL']+'_'+all_mut_data_cp['CONSEQUENCE']
             # Count the occurrence of each Mut/consequence for each Sample_ID
@@ -334,7 +367,7 @@ class FetchData(object):
             all_mut_data.drop('HUGO_SYMBOL', axis=1, inplace=True)
             all_mut_data_cp = all_mut_data.drop_duplicates(inplace=False)
         # if count is greater than 2 set to 1, else 0
-        mutDF.iloc[:,1:] = mutDF.iloc[:,1:].applymap(lambda x: x if x >= 1 else 0)
+        #mutDF.iloc[:,1:] = mutDF.iloc[:,1:].applymap(lambda x: x if x >= 1 else 0)
         # Try dropping columns with NaN values in the column names first
         try:
             mutDF = mutDF.drop(columns=[np.nan])
@@ -424,9 +457,9 @@ class FetchData(object):
                 # Step 3: Flatten the values - skip NaN values
                 # If the sublist is iterable (e.g., list), process its items - Join lists or tuples into a string, skip float/NaN   
                 flattened_phrases = [item if isinstance(item, str) else ' '.join(map(str, item)) for sublist in checked_phrases for item in sublist if not pd.isna(item)]
-                normalized_phrases = [fix_text(s) for s in flattened_phrases]
+              #  normalized_phrases = [fix_text(s) for s in flattened_phrases]
                 # Step 4: Group similar values
-                replacements = group_and_replace(normalized_phrases)
+                replacements = group_by_seed(flattened_phrases)
                 harmonized_df[column] = df_no_duplicates[column].apply(lambda x: replace_with_fixed(x, replacements) if not pd.isna(x) else x)    
         return harmonized_df
 
