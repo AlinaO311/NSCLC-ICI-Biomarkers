@@ -86,17 +86,6 @@ setnames(melted, c("sample", "gene", "variant_class", "counts"))
 
 ######################### ADD clinical data
 
-# Load the required library
-library(colorspace)
-
-# Number of unique mutation categories (you need this to match the number of colors)
-n_colors <- length(unique(melted$variant_class))  # Assuming 'Mutation_Type' has the mutation categories
-
-palette <- qualitative_hcl(n_colors, palette = "Dark3")
-
-# Generate a palette with enough colors
-mutationColours <- setNames(palette, unique(melted$variant_class))
-
 # Select clinical variables to include in plot - durable clinical benefit response map to responder and non-responder
 clinicalData <- meta_tbl %>% 
   select(PATIENT_ID, DURABLE_CLINICAL_BENEFIT, HISTOLOGY) %>%
@@ -124,13 +113,23 @@ sampleVec[!sampleVec %in% clinicalData_2$sample]
 # Create a vector to save mutation priority order for plotting
 mutation_priority <- as.character(unique(melted$variant_class))
 
-clinVarOrder_map <- c(unique(clinicalData$Best_Response[order(clinicalData$Best_Response)]), unique(clinicalData$Histology[order(clinicalData$Histology)]))
+# Create a vector to save clinical variable order for plotting
+#clinVarOrder_map <- c(unique(clinicalData$Best_Response[order(clinicalData$Best_Response)]), unique(clinicalData$Histology[order(clinicalData$Histology)]))
+
+distinct_values <- clinicalData_2 %>%
+  group_by(variable) %>%
+  summarize(distinct_values = list(unique(value)), .groups = "drop") %>%
+  deframe()
+
+clinVarOrder_map <- unique(unlist(distinct_values))
 
 # Create waterfall plot
 #pdf(file.path(outfile,"gene_mds_plot.pdf"))
 # Specify the full path for the PDF output file
 output_file <- file.path(output_folder, "waterfall_plot.png")
 
+num_cols <- ncol(clinicalData)-1
+
 png(output_file, height=12, width=15, units="in", res=300)
-waterfall(melted, fileType = "Custom",  variant_class_order=mutation_priority , clinData=clinicalData_2,clinVarOrder=clinVarOrder_map, clinLegCol=ncol(clinicalData)-1, section_heights=c(1,5,2), mainRecurCutoff = 0.05)
+waterfall(melted, fileType = "Custom",  variant_class_order=mutation_priority , clinData=clinicalData_2,clinVarOrder=clinVarOrder_map, clinLegCol=num_cols, section_heights=c(1,5,2), mainRecurCutoff = 0.05)
 dev.off()
