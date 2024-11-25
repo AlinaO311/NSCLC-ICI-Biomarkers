@@ -40,9 +40,9 @@ def fix_text(s):
         # Convert to lowercase
         s = s.lower()
         # Replace non-alphanumeric characters with spaces
-        s = re.sub(r'[^a-z0-9\s]', ' ', s)
+        s = re.sub(r'[^a-z0-9\s]', '_', s)
         # Remove extra spaces
-        s = re.sub(r'\s+', ' ', s).strip()
+        s = re.sub(r'_+', '_', s).strip('_')
         # modify to handle Nan
         return s
     return s
