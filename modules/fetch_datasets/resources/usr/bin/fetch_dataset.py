@@ -422,6 +422,7 @@ class FetchData(object):
             ###################
             ########### TRY
             def clean_and_standardize(s):
+
                 """
                 Clean and standardize text:
                 - Convert to lowercase.
@@ -444,6 +445,7 @@ class FetchData(object):
                 elif 'stop_retain' in s or 'stop_gain' in s:
                     return 'stop_gain'
                 return s
+            all_mut_data_cp = all_mut_data.copy()
             # Step 1: Replace NaN with 'unknown'
             all_mut_data_cp['CONSEQUENCE'] = all_mut_data_cp['CONSEQUENCE'].fillna('unknown')
             # Step 2: Clean and standardize the column
