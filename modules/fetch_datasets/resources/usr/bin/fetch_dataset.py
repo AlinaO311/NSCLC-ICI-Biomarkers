@@ -561,7 +561,8 @@ class FetchData(object):
               #  normalized_phrases = [fix_text(s) for s in flattened_phrases]
                 # Step 4: Group similar values
                 replacements = group_replace(flattened_phrases)
-                harmonized_df[column] = df_no_duplicates[column].apply(lambda x: replace_with_fixed(x, replacements) if not pd.isna(x) else x)    
+                harmonized_df[column] = replace_with_grouped(harmonized_df[column], replacements)
+              #  harmonized_df[column] = df_no_duplicates[column].apply(lambda x: replace_with_fixed(x, replacements) if not pd.isna(x) else x)    
         return harmonized_df
 
 def Harmonize(self, *args):
