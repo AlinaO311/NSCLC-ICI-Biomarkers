@@ -35,17 +35,35 @@ def replace_nan(column, placeholder):
     return column.fillna(placeholder)
 
 def fix_text(s):
-    """Fix text by converting to lowercase, removing non-alphanumeric characters, and removing extra spaces."""
-    if isinstance(s, str):
-        # Convert to lowercase
-        s = s.lower()
-        # Replace non-alphanumeric characters with spaces
-        s = re.sub(r'[^a-z0-9\s]', '_', s)
-        # Remove extra spaces
-        s = re.sub(r'_+', '_', s).strip('_')
-        # modify to handle Nan
+    """
+    - Convert to lowercase
+    - Replace non-alphanumeric characters with underscores
+    - Replace spaces with underscores
+    - Group '5' as 'upstream' and '3' as 'downstream'
+    """
+    if not isinstance(s, str):
         return s
+    # Normalize text
+    s = re.sub(r'[^a-z0-9\s]', '_', s.lower())
+    s = re.sub(r'\s+', '_', s).strip('_')
+    # Group '5' with upstream and '3' with downstream
+    if '5' in s:
+        return 'upstream'
+    elif '3' in s:
+        return 'downstream' 
     return s
+
+# alternative replace_with_fixed function
+def replace_with_grouped(series, grouped_dict):
+    """
+    Replace phrases in a series with their longest representative from grouped_dict.
+    """
+    def replace_value(value):
+        for key, values in grouped_dict.items():
+            if value in values:
+                return key
+        return value
+    return series.apply(replace_value)
 
 def group_by_seed(words):
     """
@@ -58,7 +76,7 @@ def group_by_seed(words):
         dict: Dictionary with longest phrase as the key for each group.
     """
     # Preprocess the words: remove spaces and underscores
-    normalized = {word: word.replace("_", "").replace(" ", "") for word in words}
+    normalized = {word: word.replace(" ", "_") for word in words}
     # Initialize the grouping dictionary
     grouped = defaultdict(list)
     # Group words where one is a seed of another
@@ -78,6 +96,35 @@ def group_by_seed(words):
         final_grouped[longest_word] = group
     return final_grouped
 
+
+def group_replace(words):
+    normalized = {word: word.replace(" ", "_") for word in words}
+    negation_prefixes = ['non_', 'not_']
+    # Initialize the grouping dictionary
+    grouped = defaultdict(list)
+    # Group words where one is a "seed" of another, excluding those with negation prefixes
+    for word, norm_word in normalized.items():
+        matched = False
+        for key in list(grouped):
+            # Don't group words that contain negation prefixes with others
+            if any(norm_word.startswith(prefix) for prefix in negation_prefixes) or any(normalized[key].startswith(prefix) for prefix in negation_prefixes):
+                continue
+            # Match if one word is a substring of the other
+            if norm_word in key or key in norm_word:
+                grouped[key].append(word)
+                matched = True
+                break
+        # If no match was found, put the word into a new group
+        if not matched:
+            grouped[word].append(word)
+    # Replace keys with the longest word in each group
+    final_grouped = {}
+    for key, group in grouped.items():
+        longest_word = max(group, key=len)
+        final_grouped[longest_word] = group
+    return final_grouped
+
+### original grouping function
 def group_and_replace(allthings):
     """Group similar phrases and replace them with a single phrase."""
     # Flatten the dictionary values into a list of phrases and remove duplicates
@@ -142,21 +189,36 @@ def group_and_replace(allthings):
 def replace_with_fixed(value, fix_dict):
     """Replace values in the DataFrame column with corrected values."""
     def find_key_by_value(fixed_value):
+        # Nested function to find a key in fix_dict whose value matches the provided fixed_value.
         for key, val in fix_dict.items():
+            # Iterate through each key-value pair in fix_dict.
             if (isinstance(val, str) and val == fixed_value) or (isinstance(val, list) and fixed_value in val):
+                # Check if the value (val) is a string and matches fixed_value, 
+                # or if val is a list and fixed_value is an element in that list.
                 return key
+                # If a match is found, return the corresponding key from fix_dict.
         return fixed_value
+        # If no match is found in fix_dict, return the original fixed_value unchanged.
     if isinstance(value, str):
+        # Check if the input `value` is a string.
         fixed_value = fix_text(value)
+        # Normalize the string value using the `fix_text` function - remove spaces and non alnum chars.
         return find_key_by_value(fixed_value)
+        # Use the nested function to replace the normalized string with the corresponding key in fix_dict, if applicable.
     elif isinstance(value, list):
+        # Check if the input `value` is a list.
         normalized_items = [fix_text(item) for item in value]
+        # Normalize each item in the list using the `fix_text` function.
         for key, val in fix_dict.items():
+            # Iterate through each key-value pair in fix_dict.
             if isinstance(val, list) and all(item in val for item in normalized_items):
+                # Check if the value (val) in fix_dict is a list and if all normalized items are present in this list.
                 return key
-        return ' '.join(normalized_items)  # Join normalized items if no match found
+                # If a match is found, return the corresponding key from fix_dict.
+        return '_'.join(normalized_items)  # Join normalized items if no match found
+        # If no match is found in fix_dict, join the normalized items into a single string separated by _.
     return value
-
+    # If the input value is neither a string nor a list, return it unchanged.
 
 def log2_normalization(x):
     """Perform log2 normalization on the input series."""
@@ -207,8 +269,7 @@ class FetchData(object):
         feature_read = feature_file.read() 
         # replacing end splitting the text when newline ('\n') is seen, remove empty str. 
         feat_list = list(filter(None, feature_read.split("\n") ))
-        C1,C2 =[],[]
-        colsList, ls = [],[]
+        C1,C2,colsList, ls = [],[], [], []
         #get list of col names from patient and sample data
         for i in patientSets.values():
             colsList+=i.columns.values.tolist()
@@ -342,21 +403,59 @@ class FetchData(object):
             all_mut_data_cp = all_mut_data.drop_duplicates(inplace=False)
         elif 'CONSEQUENCE'  in keep_feats:
             # Replace NaN in CONSEQUENCE with a placeholder and construct MUT_CONSEQUENCE
-            all_mut_data['CONSEQUENCE'] = replace_nan(all_mut_data['CONSEQUENCE'], 'unknown')
+         #   all_mut_data['CONSEQUENCE'] = replace_nan(all_mut_data['CONSEQUENCE'], 'unknown')
             # group and replace values in CONSEQUENCE
-            all_mut_data = all_mut_data.replace(r'lost', 'loss', regex=True)
-            all_mut_data_cp = all_mut_data.copy()
+          #  all_mut_data = all_mut_data.replace(r'lost', 'loss', regex=True)
+           # all_mut_data['CONSEQUENCE'] = all_mut_data['CONSEQUENCE'].str.replace(r'\s+', '_', regex=True)
+           # all_mut_data_cp = all_mut_data.copy()
             #Step 1: Extract all words from the column
-            all_phrases = all_mut_data['CONSEQUENCE'].tolist()
+          #  all_phrases = all_mut_data_cp['CONSEQUENCE'].tolist()
             # Step 2: Ensure each sublist is a list of strings
-            checked_phrases = [sublist if isinstance(sublist, list) else [sublist] for sublist in all_phrases]
-            repl_mult = [['multiple' if isinstance(item, str) and ',' in item else item for item in sublist] for sublist in checked_phrases]
+          #  checked_phrases = [sublist if isinstance(sublist, list) else [sublist] for sublist in all_phrases]
+           # repl_mult = [['multiple' if isinstance(item, str) and ',' in item else item for item in sublist] for sublist in checked_phrases]
             # Step 3: Flatten the values - skip NaN values
             # If the sublist is iterable (e.g., list), process its items - Join lists or tuples into a string, skip float/NaN   
-            flattened_phrases = [item if isinstance(item, str) else ' '.join(map(str, item)) for sublist in repl_mult for item in sublist if not pd.isna(item)]
+          #  flattened_phrases = [item if isinstance(item, str) else ' '.join(map(str, item)) for sublist in repl_mult for item in sublist if not pd.isna(item)]
             # Step 4: Group similar values
-            replacements = group_by_seed(flattened_phrases)
-            all_mut_data_cp['CONSEQUENCE'] = all_mut_data_cp['CONSEQUENCE'].apply(lambda x: replace_with_fixed(x, replacements) if not pd.isna(x) else x)  
+          #  replacements = group_by_seed(flattened_phrases)
+           # all_mut_data_cp['CONSEQUENCE'] = all_mut_data_cp['CONSEQUENCE'].apply(lambda x: replace_with_fixed(x, replacements) if not pd.isna(x) else x)  
+            ###################
+            ########### TRY
+            def clean_and_standardize(s):
+                """
+                Clean and standardize text:
+                - Convert to lowercase.
+                - Replace non-alphanumeric characters with underscores.
+                - Remove multiple spaces/underscores.
+                - Replace ',' with 'multiple'.
+                """
+                if not isinstance(s, str):
+                    return s
+                if ',' in s:
+                    return 'multiple'
+                s = re.sub(r'[^a-z0-9\s]', '_', s.lower())
+                # replace spaces with underscores
+                s = re.sub(r'\s+', '_', s).strip('_')
+                # Group '5' with upstream and '3' with downstream
+                if '5' in s:
+                    return 'upstream'
+                elif '3' in s:
+                    return 'downstream' 
+                elif 'stop_retain' in s or 'stop_gain' in s:
+                    return 'stop_gain'
+                return s
+            # Step 1: Replace NaN with 'unknown'
+            all_mut_data_cp['CONSEQUENCE'] = all_mut_data_cp['CONSEQUENCE'].fillna('unknown')
+            # Step 2: Clean and standardize the column
+            all_mut_data_cp['CONSEQUENCE'] = all_mut_data_cp['CONSEQUENCE'].apply(clean_and_standardize)
+            # Step 3: Replace 'lost' with 'loss'
+            all_mut_data_cp['CONSEQUENCE'] = all_mut_data_cp['CONSEQUENCE'].replace(r'lost', 'loss', regex=True)
+            # Step 4: Group similar phrases
+            unique_phrases = all_mut_data_cp['CONSEQUENCE'].dropna().unique().tolist()
+            grouped_dict = group_by_seed(unique_phrases)
+            # Step 5: Replace phrases with grouped values
+            all_mut_data_cp['CONSEQUENCE'] = replace_with_grouped(all_mut_data_cp['CONSEQUENCE'], grouped_dict)
+            #############
             all_mut_data_cp['MUT_CONSEQUENCE'] = all_mut_data_cp['HUGO_SYMBOL']+'_'+all_mut_data_cp['CONSEQUENCE']
             # Count the occurrence of each Mut/consequence for each Sample_ID
             mutDF = pd.crosstab( all_mut_data_cp['TUMOR_SAMPLE_BARCODE'], all_mut_data_cp['MUT_CONSEQUENCE']).reindex(all_mut_data_cp['TUMOR_SAMPLE_BARCODE'], fill_value=np.nan)
@@ -459,8 +558,8 @@ class FetchData(object):
                 flattened_phrases = [item if isinstance(item, str) else ' '.join(map(str, item)) for sublist in checked_phrases for item in sublist if not pd.isna(item)]
               #  normalized_phrases = [fix_text(s) for s in flattened_phrases]
                 # Step 4: Group similar values
-                replacements = group_by_seed(flattened_phrases)
-                harmonized_df[column] = df_no_duplicates[column].apply(lambda x: replace_with_fixed(x, replacements) if not pd.isna(x) else x)    
+                replacements = group_replace(flattened_phrases)
+                harmonized_df[column] = df_no_duplicates[column].apply(lambda x: replace_with_grouped(x, replacements) if not pd.isna(x) else x)    
         return harmonized_df
 
 def Harmonize(self, *args):
