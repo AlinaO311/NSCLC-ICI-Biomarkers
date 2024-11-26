@@ -123,6 +123,11 @@ distinct_values <- clinicalData_2 %>%
 
 clinVarOrder_map <- unique(unlist(distinct_values))
 
+library(Polychrome)
+
+# Generate a palette with 36 distinct colors
+palette <- createPalette(36, seedcolors = c("#ff0000", "#00ff00", "#0000ff"))
+
 # Create waterfall plot
 #pdf(file.path(outfile,"gene_mds_plot.pdf"))
 # Specify the full path for the PDF output file
@@ -131,5 +136,5 @@ output_file <- file.path(output_folder, "waterfall_plot.png")
 num_cols <- ncol(clinicalData)-1
 
 png(output_file, height=12, width=15, units="in", res=300)
-waterfall(melted, fileType = "Custom",  variant_class_order=mutation_priority , clinData=clinicalData_2,clinVarOrder=clinVarOrder_map, clinLegCol=num_cols, section_heights=c(1,5,2), mainRecurCutoff = 0.05)
+waterfall(melted, fileType = "Custom",  variant_class_order=mutation_priority , clinData=clinicalData_2,clinVarOrder=clinVarOrder_map, clinLegCol=num_cols, section_heights=c(1,5,2), mainRecurCutoff = 0.05, mainPalette=palette)
 dev.off()
