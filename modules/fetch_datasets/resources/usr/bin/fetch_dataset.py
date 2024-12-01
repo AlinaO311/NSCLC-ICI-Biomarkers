@@ -125,101 +125,6 @@ def group_replace(words):
         final_grouped[longest_word] = group 
     return final_grouped
 
-### original grouping function
-def group_and_replace(allthings):
-    """Group similar phrases and replace them with a single phrase."""
-    # Flatten the dictionary values into a list of phrases and remove duplicates
-    unique_phrases = list(set(allthings))
-    #Filter NAN values
-    unique_nonNA_phrases = [phrase for phrase in unique_phrases if isinstance(phrase, str)]
-    collapsed_dict = defaultdict(list)
-    # Tokenize the phrases
-    tokenized_phrases = [word_tokenize(phrase) for phrase in unique_nonNA_phrases]
-    # Create a dictionary with lists of phrases starting with the same word
-    for sublist in tokenized_phrases:
-        collapsed_dict[sublist[0]].append(' '.join(sublist))
-    # Replace spaces with underscores and choose the longest value as the key
-    updated_dict = {}
-    for key, values in collapsed_dict.items():
-        # Replace spaces with underscores in values
-        values_with_underscores = [value.replace(' ', '_') for value in values]
-        # Find the longest value by character count
-        longest_value = max(values_with_underscores, key=len)
-        updated_dict[longest_value] = values_with_underscores
-    # Remove empty lists and convert keys to int or float if possible
-    merged_dict = defaultdict(list)
-    seen_keys = set()
-    for key in list(updated_dict.keys()):
-        if key in seen_keys:
-            continue
-        merged_key = key
-        merged_values = updated_dict[key]
-        for other_key in list(updated_dict.keys()):
-            # Merge values if the first letters of the keys are the same
-            # Check if keys are similar (substring-based seeding logic)
-            if other_key in key or key in other_key:
-                merged_values.extend(updated_dict[other_key])
-                seen_keys.add(other_key)
-                if len(other_key) > len(merged_key):
-                    merged_key = other_key
-            elif other_key != key and other_key[:1] == key[:1]:
-                merged_values.extend(updated_dict[other_key])
-                seen_keys.add(other_key)
-                # Choose the longest key as the merged_key
-                if len(other_key) > len(merged_key):
-                    merged_key = other_key
-        merged_dict[merged_key] = merged_values
-        seen_keys.add(key)
-    final_dict = {}
-    for key, value in merged_dict.items():
-        if value:
-            try:
-                new_key = int(key)
-            except ValueError:
-                try:
-                    new_key = float(key)
-                except ValueError:
-                    new_key = key
-            if new_key in final_dict:
-                final_dict[new_key].extend(value)
-            else:
-                final_dict[new_key] = value
-    return final_dict
-
-# Function to replace values in the DataFrame column
-def replace_with_fixed(value, fix_dict):
-    """Replace values in the DataFrame column with corrected values."""
-    def find_key_by_value(fixed_value):
-        # Nested function to find a key in fix_dict whose value matches the provided fixed_value.
-        for key, val in fix_dict.items():
-            # Iterate through each key-value pair in fix_dict.
-            if (isinstance(val, str) and val == fixed_value) or (isinstance(val, list) and fixed_value in val):
-                # Check if the value (val) is a string and matches fixed_value, 
-                # or if val is a list and fixed_value is an element in that list.
-                return key
-                # If a match is found, return the corresponding key from fix_dict.
-        return fixed_value
-        # If no match is found in fix_dict, return the original fixed_value unchanged.
-    if isinstance(value, str):
-        # Check if the input `value` is a string.
-        fixed_value = fix_text(value)
-        # Normalize the string value using the `fix_text` function - remove spaces and non alnum chars.
-        return find_key_by_value(fixed_value)
-        # Use the nested function to replace the normalized string with the corresponding key in fix_dict, if applicable.
-    elif isinstance(value, list):
-        # Check if the input `value` is a list.
-        normalized_items = [fix_text(item) for item in value]
-        # Normalize each item in the list using the `fix_text` function.
-        for key, val in fix_dict.items():
-            # Iterate through each key-value pair in fix_dict.
-            if isinstance(val, list) and all(item in val for item in normalized_items):
-                # Check if the value (val) in fix_dict is a list and if all normalized items are present in this list.
-                return key
-                # If a match is found, return the corresponding key from fix_dict.
-        return '_'.join(normalized_items)  # Join normalized items if no match found
-        # If no match is found in fix_dict, join the normalized items into a single string separated by _.
-    return value
-    # If the input value is neither a string nor a list, return it unchanged.
 
 def log2_normalization(x):
     """Perform log2 normalization on the input series."""
@@ -419,7 +324,6 @@ class FetchData(object):
           #  flattened_phrases = [item if isinstance(item, str) else ' '.join(map(str, item)) for sublist in repl_mult for item in sublist if not pd.isna(item)]
             # Step 4: Group similar values
           #  replacements = group_by_seed(flattened_phrases)
-           # all_mut_data_cp['CONSEQUENCE'] = all_mut_data_cp['CONSEQUENCE'].apply(lambda x: replace_with_fixed(x, replacements) if not pd.isna(x) else x)  
             ###################
             ########### TRY
             def clean_and_standardize(s):
@@ -563,7 +467,6 @@ class FetchData(object):
                 # Step 4: Group similar values
                 replacements = group_replace(flattened_phrases)
                 harmonized_df[column] = replace_with_grouped(harmonized_df[column], replacements)
-              #   harmonized_df[column] = df_no_duplicates[column].apply(lambda x: replace_with_fixed(x, replacements) if not pd.isna(x) else x)    
         return harmonized_df
 
 def Harmonize(self, *args):
