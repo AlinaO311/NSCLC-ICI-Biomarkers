@@ -98,30 +98,31 @@ def group_by_seed(words):
 
 
 def group_replace(words):
-    normalized = {word: word.replace(" ", "_") for word in words}
+    # Normalize words for consistent comparisons
+    normalized = {word: word.replace(" ", "_").lower() for word in words}
     negation_prefixes = ['non_', 'not_']
-    # Initialize the grouping dictionary
     grouped = defaultdict(list)
-    # Group words where one is a "seed" of another, excluding those with negation prefixes
+    # Group words based on substring matches
     for word, norm_word in normalized.items():
         matched = False
-        for key in list(grouped):
-            # Don't group words that contain negation prefixes with others
-            if any(norm_word.startswith(prefix) for prefix in negation_prefixes) or any(normalized[key].startswith(prefix) for prefix in negation_prefixes):
+        for key, key_norm in [(k, normalized[k]) for k in grouped]:
+            # Exclude groups with negation prefixes
+            if any(key_norm.startswith(prefix) for prefix in negation_prefixes) or any(norm_word.startswith(prefix) for prefix in negation_prefixes):
                 continue
-            # Match if one word is a substring of the other
-            if norm_word in key or key in norm_word:
+            # Group if one word is a substring of the other
+            if norm_word in key_norm or key_norm in norm_word:
                 grouped[key].append(word)
                 matched = True
                 break
-        # If no match was found, put the word into a new group
+        # Add as a new group if no match was found
         if not matched:
             grouped[word].append(word)
-    # Replace keys with the longest word in each group
+    
+    # Use the longest word as the representative
     final_grouped = {}
     for key, group in grouped.items():
         longest_word = max(group, key=len)
-        final_grouped[longest_word] = group
+        final_grouped[longest_word] = group 
     return final_grouped
 
 ### original grouping function
@@ -562,7 +563,7 @@ class FetchData(object):
                 # Step 4: Group similar values
                 replacements = group_replace(flattened_phrases)
                 harmonized_df[column] = replace_with_grouped(harmonized_df[column], replacements)
-              #  harmonized_df[column] = df_no_duplicates[column].apply(lambda x: replace_with_fixed(x, replacements) if not pd.isna(x) else x)    
+              #   harmonized_df[column] = df_no_duplicates[column].apply(lambda x: replace_with_fixed(x, replacements) if not pd.isna(x) else x)    
         return harmonized_df
 
 def Harmonize(self, *args):
