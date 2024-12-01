@@ -379,7 +379,7 @@ class FetchData(object):
                     return 'upstream'
                 elif '3' in s:
                     return 'downstream' 
-                elif 'stop_retain' in s or 'stop_gain' in s:
+                elif 'stop' in s and ('gain' in s or 'retained' in s):
                     return 'stop_gain'
                 return s
             all_mut_data_cp = all_mut_data.copy()
