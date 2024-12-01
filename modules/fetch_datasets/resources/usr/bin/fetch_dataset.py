@@ -67,6 +67,38 @@ def replace_with_grouped(series, grouped_dict):
 
 def group_by_seed(words):
     """
+    Group phrases based on seed matching after removing spaces/underscores and normalizing.
+
+    Args:
+        words (list): List of phrases to group.
+
+    Returns:
+        dict: Dictionary with longest phrase as the key for each group.
+    """
+    # Preprocess the words: normalize by removing spaces/underscores and converting to lowercase
+    normalized = {word: re.sub(r'[_\s]+', '', word.lower()) for word in words}
+    # Initialize the grouping dictionary
+    grouped = defaultdict(list)
+    # Group words where one is a seed of another
+    for word, norm_word in normalized.items():
+        matched = False
+        for key in grouped:
+            key_norm = normalized[key]
+            if norm_word in key_norm or key_norm in norm_word:
+                grouped[key].append(word)
+                matched = True
+                break
+        if not matched:
+            grouped[word].append(word)
+    # Replace keys with the longest word in each group
+    final_grouped = {}
+    for key, group in grouped.items():
+        longest_word = max(group, key=len)
+        final_grouped[longest_word] = group
+    return final_grouped
+
+def group_by_seed1(words):
+    """
     Group phrases based on seed matching after removing spaces/underscores.
 
     Args:
