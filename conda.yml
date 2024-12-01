@@ -12,6 +12,7 @@ dependencies:
   - r-optparse
   - r-data.table
   - r-stringr
+  - r-polychrome==1.5.1
   - bioconductor-genvisr>=1.20.0
   - matplotlib==3.5.2
   - numpy==1.22.4
