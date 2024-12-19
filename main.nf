@@ -54,16 +54,6 @@ log.info """\
  * main script flow
  */
 
-process PRINT_PATH {
-  debug true
-  output:
-    stdout
-  script:
-  """
-  echo $PATH
-  """
-}
-
 process GetDateTimeAsString {
     output:
     stdout
@@ -78,13 +68,14 @@ process GetDateTimeAsString {
 process findMostRecentFile {
     input:
     val dirPath
+    val filePattern
 
     output:
     stdout
 
     script:
     """
-    ls -t ${dirPath} | tail -1
+    ls -t ${dirPath}/${filePattern} | tail -1
     """
 }
 
@@ -100,7 +91,7 @@ params.exp_name = params.exp_name ?: false
 workflow {
     def expName = null
     datetime_string = GetDateTimeAsString()
-     
+
     mut_file	   = Channel.fromPath("${params.mutations_data}")
     feat_file       = Channel.fromPath("${params.feature_data}")
     
@@ -125,21 +116,20 @@ workflow {
     }
     // otherwise load input files: need DataPrep/*.tsv & config
     else {
-        // Load the most recent harmonized data file
-        def dirPath = "${params.output_dir}/Data_Prep/"
-        most_recent_file_channel = Channel.value(dirPath)
-            .map { path ->
-                findMostRecentFile(path).first() // Capture the output
-            }
-        
-        // Convert the most recent file to a channel
-        ch_data = most_recent_file_channel.map { file ->
-            Channel.fromPath(file)
+        dataPrepDir = "${workflow.launchDir}/${params.output_dir}/DataPrep"
+        // Example: Find the most recent `.tsv` file
+        mostRecentTsvFile = findMostRecentFile(dataPrepDir, '*.tsv')
+        ch_data = mostRecentTsvFile.map { fileName ->
+            def fullPathTsv = "${dataPrepDir}/${fileName.trim()}"
+            if (new File(fullPathTsv).exists()){
+            return fullPathTsv
+            } else { return fileName.trim() }
         }
-        ch_preproc_config = Channel.fromPath("${params.output_dir}/configs/preprocess/*.yml")
+        println "Using Data file: ${ch_data.view()}"
+        ch_preproc_config = Channel.fromPath("${params.output_dir}/configs/preprocess/*.yml")        
     }
    
-    // visualize data including missing heatmao
+    // visualize data including missing heatmap
     if (params.visualize) {
         visualize_data(ch_data, datetime_string , params.mutations_data ,  params.output_dir)
     } else {
@@ -186,7 +176,7 @@ workflow {
         } else {
             if (!params.exp_name) {
             base = "${params.output_dir}/Modelling/output/models"
-            expName = findMostRecentFile(base)
+            expName = findMostRecentFile(base,  '[!.]*')
             println "Using experiment model when train not run with experiment name: ${expName}"
             ch_model_to_infer_config = expName.map { mostRecentFile ->
                  def fullPath_yml = "${base}/${mostRecentFile.trim()}/config/*.yml"
@@ -212,7 +202,7 @@ workflow {
     if (params.infer_from_data == true) {
         // 2) if yes, is experiment name empty or not given
         if (!params.exp_name) {
-            params.exp_name = ""; // Set default value if not provided
+            params.exp_name = ""; // Set default wvalue if not provided
         }
         output_name = Channel.of("${params.model_type}_model_prediction_inference.csv")
         (ch_config_for_analysis, ch_infer_csv) = infer_from_data(ch_model_to_infer_config.view(),
