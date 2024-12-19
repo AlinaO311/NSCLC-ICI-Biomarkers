@@ -30,7 +30,7 @@ def nn_process(config: dict, df: pd.DataFrame, *args) -> Tuple[pd.DataFrame, pd.
 
     df = df[df['DURABLE_CLINICAL_BENEFIT'].notna()]
 
-    df = df.drop(columns=['SAMPLE_ID', 'PATIENT_ID','STUDY_NAME'])
+    df = df.drop(columns=['SAMPLE_ID', 'PATIENT_ID','STUDY_NAME'], errors='ignore')
     df.info(memory_usage=False) # Prints info.
 
     catCols = [col for col in df.columns if df[col].dtype=="O" and 'DURABLE_CLINICAL_BENEFIT' not in col]
