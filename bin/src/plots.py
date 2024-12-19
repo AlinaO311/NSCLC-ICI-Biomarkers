@@ -121,36 +121,26 @@ def shap_tree_explainer(
     """Generates a SHAP tree explainer plot for best model.
 
     Arguments:
-        X_test -- a data frame containing the values to plot
+        X_data -- a data frame containing the values to plot
         model  -- the model to be explained
 
     Keyword Arguments:
-        category_column -- The name of a column containing categories
-            for the plot color of each data point. (default: {None})
         plotargs -- Any additional arguments for the scatter plot.
-
-    Returns:
-        The resulting plot as a seaborn facet grid.
     """
-    #groups = defaultdict(list)
-
-#    one_hot_cols = X_data.columns[(X_data.isin([0, 1]).all())]
- #   for col in one_hot_cols:
-  #      prefix = col.split('_')[0]
-   #     groups[prefix].append(col)
-
-#    # Step 2: Create a copy of X_data to X_test
- #   X_test = X_data.copy()
-    # Step 3: Drop the one-hot encoded columns from X_test
-  #  X_test.drop(columns=one_hot_cols, inplace=True)
-
-   # for category, columns in groups.items():
-    #    X_test[f'{category}'] = X_data[columns].sum(axis=1)
-
-    shap_values = shap.TreeExplainer(model).shap_values(X_data)
+    explainer = shap.TreeExplainer(model)
+    shap_values = explainer.shap_values(X_data)
+    # Calculate mean absolute SHAP values for each feature
+    mean_abs_shap_values = np.abs(shap_values).mean(axis=0)
+    # Set a threshold for low-impact features (e.g., mean SHAP value < 0.01)
+    threshold = 0.01
+    low_impact_features = np.where(mean_abs_shap_values < threshold)[0]
+    # Filter out low-impact features
+    filtered_shap_values = np.delete(shap_values, low_impact_features, axis=1)
+    filtered_feature_names = np.delete(X_data.columns, low_impact_features)
+    # Plot SHAP summary plot for the filtered feature set
     plt.figure()
-    shap.summary_plot(shap_values, X_data, show=False)
-
+    # Plot SHAP summary plot for the filtered feature set
+    shap.summary_plot(filtered_shap_values, X_data[:, np.delete(np.arange(X_data.shape[1]), low_impact_features)], feature_names=filtered_feature_names)
 
 def stacked_bar_plot(
     df: pd.DataFrame,
