@@ -300,6 +300,11 @@ class FetchData(object):
                     dfs_to_concat.append(df)
             concatinated_df = pd.concat(dfs_to_concat, ignore_index = True)
             concatinated_df = concatinated_df.filter(filterCols)
+            print('shape of data')
+            print(concatinated_df.shape)
+            # Drop rows without a unique combination of 'patient' and 'sample_id'
+            if 'PATIENT_ID' in concatinated_df.columns and 'SAMPLE_ID' in concatinated_df.columns:
+                concatinated_df = concatinated_df[~concatinated_df.duplicated(subset=['PATIENT_ID', 'SAMPLE_ID'], keep=False)]
             return concatinated_df
         change_names(patientSets, result)
         change_names(sampleSets, result)
@@ -340,26 +345,7 @@ class FetchData(object):
             all_mut_data.drop(['HUGO_SYMBOL','MUT_HGVSP','HGVSP'], axis=1, inplace=True)
             all_mut_data_cp = all_mut_data.drop_duplicates(inplace=False)
         elif 'CONSEQUENCE'  in keep_feats:
-            # Replace NaN in CONSEQUENCE with a placeholder and construct MUT_CONSEQUENCE
-         #   all_mut_data['CONSEQUENCE'] = replace_nan(all_mut_data['CONSEQUENCE'], 'unknown')
-            # group and replace values in CONSEQUENCE
-          #  all_mut_data = all_mut_data.replace(r'lost', 'loss', regex=True)
-           # all_mut_data['CONSEQUENCE'] = all_mut_data['CONSEQUENCE'].str.replace(r'\s+', '_', regex=True)
-           # all_mut_data_cp = all_mut_data.copy()
-            #Step 1: Extract all words from the column
-          #  all_phrases = all_mut_data_cp['CONSEQUENCE'].tolist()
-            # Step 2: Ensure each sublist is a list of strings
-          #  checked_phrases = [sublist if isinstance(sublist, list) else [sublist] for sublist in all_phrases]
-           # repl_mult = [['multiple' if isinstance(item, str) and ',' in item else item for item in sublist] for sublist in checked_phrases]
-            # Step 3: Flatten the values - skip NaN values
-            # If the sublist is iterable (e.g., list), process its items - Join lists or tuples into a string, skip float/NaN   
-          #  flattened_phrases = [item if isinstance(item, str) else ' '.join(map(str, item)) for sublist in repl_mult for item in sublist if not pd.isna(item)]
-            # Step 4: Group similar values
-          #  replacements = group_by_seed(flattened_phrases)
-            ###################
-            ########### TRY
             def clean_and_standardize(s):
-
                 """
                 Clean and standardize text:
                 - Convert to lowercase.
