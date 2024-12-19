@@ -19,6 +19,7 @@ process visualize_data {
       export DATE_VALUE
       PYTHONPATH=$baseDir/bin/src visualize.py --data_path ${data_path} --mutation_data ${mutations_data} --dir ${params.output_dir} 
       waterfall.R -i ${data_path} -m ${mutations_data} -o ${params.output_dir}
+      tableone.R -i ${data_path} -m ${mutations_data} -o ${params.output_dir}
       """
 
     else
@@ -27,6 +28,7 @@ process visualize_data {
       export DATE_VALUE
       PYTHONPATH=$baseDir/bin/src visualize.py  --data_path ${data_path}  --mutation_data ${mutations_data} --dir ${params.output_dir}
       waterfall.R -i ${data_path} -m ${mutations_data} -o ${params.output_dir}
+      tableone.R -i ${data_path} -m ${mutations_data} -o ${params.output_dir}
       """
 
 }
