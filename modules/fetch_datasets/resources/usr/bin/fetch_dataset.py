@@ -34,46 +34,17 @@ cwd=os.getcwd().split('work', 1)[0]
 def replace_nan(column, placeholder):
     return column.fillna(placeholder)
 
-def fix_text(s):
-    """
-    - Convert to lowercase
-    - Replace non-alphanumeric characters with underscores
-    - Replace spaces with underscores
-    - Group '5' as 'upstream' and '3' as 'downstream'
-    """
-    if not isinstance(s, str):
-        return s
-    # Normalize text
-    s = re.sub(r'[^a-z0-9\s]', '_', s.lower())
-    s = re.sub(r'\s+', '_', s).strip('_')
-    # Group '5' with upstream and '3' with downstream
-    if '5' in s:
-        return 'upstream'
-    elif '3' in s:
-        return 'downstream' 
-    return s
 
-# alternative replace_with_fixed function
-def replace_with_grouped(series, grouped_dict):
+def group_consequence(series, words):
     """
-    Replace phrases in a series with their longest representative from grouped_dict.
-    """
-    def replace_value(value):
-        for key, values in grouped_dict.items():
-            if value in values:
-                return key
-        return value
-    return series.apply(replace_value)
-
-def group_by_seed(words):
-    """
-    Group phrases based on seed matching after removing spaces/underscores and normalizing.
+    Group phrases based on seed matching and replace them in a series with their longest representative.
 
     Args:
+        series (pd.Series): Series of phrases to replace.
         words (list): List of phrases to group.
 
     Returns:
-        dict: Dictionary with longest phrase as the key for each group.
+        pd.Series: Series with phrases replaced by their longest representative.
     """
     # Preprocess the words: normalize by removing spaces/underscores and converting to lowercase
     normalized = {word: re.sub(r'[_\s]+', '', word.lower()) for word in words}
@@ -95,67 +66,81 @@ def group_by_seed(words):
     for key, group in grouped.items():
         longest_word = max(group, key=len)
         final_grouped[longest_word] = group
-    return final_grouped
+    # Replace phrases in the series with their longest representative
+    def replace_value(value):
+        for key, values in final_grouped.items():
+            if value in values:
+                return key
+        return value
+    return series.apply(replace_value)
 
-def group_by_seed1(words):
+
+
+def process_and_harmonize(dataframe_column):
     """
-    Group phrases based on seed matching after removing spaces/underscores.
-
-    Args:
-        words (list): List of phrases to group.
-
-    Returns:
-        dict: Dictionary with longest phrase as the key for each group.
+    Harmonize a DataFrame column by grouping similar phrases and replacing them
+    with standardized representative values.
     """
-    # Preprocess the words: remove spaces and underscores
-    normalized = {word: word.replace(" ", "_") for word in words}
-    # Initialize the grouping dictionary
-    grouped = defaultdict(list)
-    # Group words where one is a seed of another
-    for word, norm_word in normalized.items():
-        matched = False
-        for key in grouped:
-            if norm_word in normalized[key] or normalized[key] in norm_word:
-                grouped[key].append(word)
-                matched = True
-                break
-        if not matched:
-            grouped[word].append(word)
-    # Replace keys with the longest word in each group
-    final_grouped = {}
-    for key, group in grouped.items():
-        longest_word = max(group, key=len)
-        final_grouped[longest_word] = group
-    return final_grouped
-
-
-def group_replace(words):
-    # Normalize words for consistent comparisons
-    normalized = {word: word.replace(" ", "_").lower() for word in words}
-    negation_prefixes = ['non_', 'not_']
-    grouped = defaultdict(list)
-    # Group words based on substring matches
-    for word, norm_word in normalized.items():
-        matched = False
-        for key, key_norm in [(k, normalized[k]) for k in grouped]:
-            # Exclude groups with negation prefixes
-            if any(key_norm.startswith(prefix) for prefix in negation_prefixes) or any(norm_word.startswith(prefix) for prefix in negation_prefixes):
-                continue
-            # Group if one word is a substring of the other
-            if norm_word in key_norm or key_norm in norm_word:
-                grouped[key].append(word)
-                matched = True
-                break
-        # Add as a new group if no match was found
-        if not matched:
-            grouped[word].append(word)
-    
-    # Use the longest word as the representative
-    final_grouped = {}
-    for key, group in grouped.items():
-        longest_word = max(group, key=len)
-        final_grouped[longest_word] = group 
-    return final_grouped
+    def normalize_text(text):
+        """Normalize text by converting to lowercase and removing special characters."""
+        if isinstance(text, str):
+            text = re.sub(r'[^a-z0-9\s]', ' ', text.lower())
+            text = re.sub(r'\s+', ' ', text).strip()
+        return text
+    def group_similar_phrases(phrases):
+        """
+        Group similar phrases and return a dictionary mapping representative phrases
+        to their grouped variants.
+        """
+        # Remove duplicates and normalize
+        unique_phrases = list(set(phrases))
+        normalized_phrases = [normalize_text(phrase) for phrase in unique_phrases if isinstance(phrase, str)]
+        # Tokenize and group by first letter
+        collapsed_dict = defaultdict(list)
+        for phrase in normalized_phrases:
+            first_letter = phrase[0]
+            collapsed_dict[first_letter].append(phrase)
+        # Create a dictionary with the shortest phrase as the representative when lengths differ
+        merged_dict = {}
+        for key, values in collapsed_dict.items():
+            grouped = defaultdict(list)
+            for phrase in values:
+                grouped[len(phrase)].append(phrase)
+            for length, group in grouped.items():
+                if len(group) > 1:  # Same-length items stay in separate lists
+                    for item in group:
+                        merged_dict[item] = [item]
+                else:  # Choose the shortest representative among different lengths
+                    if group:
+                        shortest = min(group, key=len)
+                        merged_dict[shortest] = values
+        return merged_dict
+    def replace_with_representative(value, phrase_dict):
+        """
+        Replace a value or list of values with their representative from the phrase dictionary.
+        """
+        if isinstance(value, str):
+            normalized_value = normalize_text(value).replace(' ', '_')
+            for representative, variants in phrase_dict.items():
+                if normalized_value in [v.replace(' ', '_') for v in variants]:
+                    return representative.replace(' ', '_')
+            return normalized_value  # Return the normalized value if no match found
+        elif isinstance(value, list):
+            return [replace_with_representative(item, phrase_dict) for item in value]
+        return value
+    # Flatten and normalize the column values
+    all_phrases = dataframe_column.tolist()
+    flat_phrases = [
+        item if isinstance(item, str) else ' '.join(map(str, item))
+        for sublist in all_phrases if not pd.isna(sublist)
+        for item in (sublist if isinstance(sublist, list) else [sublist])
+    ]
+    # Normalize flat_phrases to have underscores before grouping
+    flat_phrases = [normalize_text(phrase).replace(' ', '_') for phrase in flat_phrases]
+    # Group similar phrases
+    phrase_dict = group_similar_phrases(flat_phrases)
+    # Replace column values with representatives
+    return dataframe_column.apply(lambda x: replace_with_representative(x, phrase_dict) if not pd.isna(x) else x)
 
 
 def log2_normalization(x):
@@ -305,6 +290,9 @@ class FetchData(object):
             # Drop rows without a unique combination of 'patient' and 'sample_id'
             if 'PATIENT_ID' in concatinated_df.columns and 'SAMPLE_ID' in concatinated_df.columns:
                 concatinated_df = concatinated_df[~concatinated_df.duplicated(subset=['PATIENT_ID', 'SAMPLE_ID'], keep=False)]
+            print('New shape')
+            print(concatinated_df.shape)
+          #  combined_df = concatinated_df.drop_duplicates()
             return concatinated_df
         change_names(patientSets, result)
         change_names(sampleSets, result)
@@ -335,17 +323,16 @@ class FetchData(object):
         if 'HGVSP' in keep_feats:
             # Replace NaN in HGVSP with a placeholder and construct MUT_HGVSP
             all_mut_data['HGVSP'] = replace_nan(all_mut_data['HGVSP'], 'unknown')
-            # group and replace values in HGVSP
-            # create concat column from HUGO_SYMBOL and HGVSP (protein mod/consequence)
+            # group and replace values in HGVSP -  create concat column from HUGO_SYMBOL and HGVSP (protein mod/consequence)
             all_mut_data['MUT_HGVSP'] = all_mut_data['HUGO_SYMBOL']+'_'+all_mut_data['HGVSP']
-            # Count the occurrence of each Mut/consequence for each Sample_ID
-            # Crosstab: Preserve NaN values in counts
+            # Count the occurrence of each Mut/consequence for each Sample_ID + Crosstab: Preserve NaN values in counts
             mutDF = pd.crosstab(all_mut_data['TUMOR_SAMPLE_BARCODE'], all_mut_data['MUT_HGVSP']).reindex(all_mut_data['TUMOR_SAMPLE_BARCODE'], fill_value=np.nan)
             #mutDF = pd.crosstab( all_mut_data['TUMOR_SAMPLE_BARCODE'], all_mut_data['MUT_HGVSP'], dropna=False).astype(int)
             all_mut_data.drop(['HUGO_SYMBOL','MUT_HGVSP','HGVSP'], axis=1, inplace=True)
             all_mut_data_cp = all_mut_data.drop_duplicates(inplace=False)
         elif 'CONSEQUENCE'  in keep_feats:
             def clean_and_standardize(s):
+
                 """
                 Clean and standardize text:
                 - Convert to lowercase.
@@ -364,7 +351,7 @@ class FetchData(object):
                 if '5' in s:
                     return 'upstream'
                 elif '3' in s:
-                    return 'downstream' 
+                    return 'downstream'
                 elif 'stop' in s and ('gain' in s or 'retained' in s):
                     return 'stop_gain'
                 return s
@@ -377,9 +364,7 @@ class FetchData(object):
             all_mut_data_cp['CONSEQUENCE'] = all_mut_data_cp['CONSEQUENCE'].replace(r'lost', 'loss', regex=True)
             # Step 4: Group similar phrases
             unique_phrases = all_mut_data_cp['CONSEQUENCE'].dropna().unique().tolist()
-            grouped_dict = group_by_seed(unique_phrases)
-            # Step 5: Replace phrases with grouped values
-            all_mut_data_cp['CONSEQUENCE'] = replace_with_grouped(all_mut_data_cp['CONSEQUENCE'], grouped_dict)
+            all_mut_data_cp['CONSEQUENCE'] = group_consequence(all_mut_data_cp['CONSEQUENCE'], unique_phrases) 
             #############
             all_mut_data_cp['MUT_CONSEQUENCE'] = all_mut_data_cp['HUGO_SYMBOL']+'_'+all_mut_data_cp['CONSEQUENCE']
             # Count the occurrence of each Mut/consequence for each Sample_ID
@@ -390,8 +375,6 @@ class FetchData(object):
             mutDF = pd.crosstab( all_mut_data['TUMOR_SAMPLE_BARCODE'], all_mut_data['HUGO_SYMBOL']).reindex(all_mut_data['TUMOR_SAMPLE_BARCODE'], fill_value=np.nan)
             all_mut_data.drop('HUGO_SYMBOL', axis=1, inplace=True)
             all_mut_data_cp = all_mut_data.drop_duplicates(inplace=False)
-        # if count is greater than 2 set to 1, else 0
-        #mutDF.iloc[:,1:] = mutDF.iloc[:,1:].applymap(lambda x: x if x >= 1 else 0)
         # Try dropping columns with NaN values in the column names first
         try:
             mutDF = mutDF.drop(columns=[np.nan])
@@ -399,7 +382,6 @@ class FetchData(object):
         # If no such columns exist or the operation fails, fall back to the original method
             if mutDF.columns.isnull().any():
                 mutDF = mutDF.loc[:, pd.notnull(mutDF.columns)]
-        #mutDF = mutDF.drop(columns=[np.nan])
         length=len(names)
         for name in range(length):
              # sum across rows where col matches any of mutations in list muts - with strict matching
@@ -447,7 +429,7 @@ class FetchData(object):
         harmonized_df = df_no_duplicates.copy()
         # Process each string column
         for column in df_no_duplicates.select_dtypes(include=['object']).columns:
-            if column not in ['PATIENT_ID', 'SAMPLE_ID', 'STUDY_NAME']:
+            if column not in ['PATIENT_ID', 'SAMPLE_ID', 'STUDY_NAME','SEX']:
                 new_values = []
                 # Group and replace phrases for PDL1 column
                 if column.startswith('PDL'):
@@ -473,18 +455,19 @@ class FetchData(object):
                             else:
                                 new_values.append(value)
                     # Assign the new values back to the column
-                    df_no_duplicates[column] = new_values
+                    harmonized_df[column] = new_values
                 #Step 1: Extract all words from the column
-                all_phrases = df_no_duplicates[column].tolist()
+                harmonized_df[column] = process_and_harmonize(harmonized_df[column])
+#                all_phrases = harmonized_df[column].tolist()
                 # Step 2: Ensure each sublist is a list of strings
-                checked_phrases = [sublist if isinstance(sublist, list) else [sublist] for sublist in all_phrases]
+ #               checked_phrases = [sublist if isinstance(sublist, list) else [sublist] for sublist in all_phrases]
                 # Step 3: Flatten the values - skip NaN values
                 # If the sublist is iterable (e.g., list), process its items - Join lists or tuples into a string, skip float/NaN   
-                flattened_phrases = [item if isinstance(item, str) else ' '.join(map(str, item)) for sublist in checked_phrases for item in sublist if not pd.isna(item)]
+  #              flattened_phrases = [item if isinstance(item, str) else ' '.join(map(str, item)) for sublist in checked_phrases for item in sublist if not pd.isna(item)]
               #  normalized_phrases = [fix_text(s) for s in flattened_phrases]
                 # Step 4: Group similar values
-                replacements = group_replace(flattened_phrases)
-                harmonized_df[column] = replace_with_grouped(harmonized_df[column], replacements)
+   #             replacements = group_replace(flattened_phrases)
+    #            harmonized_df[column] = replace_with_grouped(harmonized_df[column], replacements)
         return harmonized_df
 
 def Harmonize(self, *args):
@@ -518,7 +501,7 @@ if __name__ == '__main__':
     for study in args.dataset_names:
         datasets.append(study)
     inputdata = Harmonize(datasets, args.mutations, args.features)
-    print('Features from Data', inputdata.columns.tolist())
+    print('Harmonized data file can be found at' + args.outdir)
 
     # save data
     inputdata.to_csv('data_'+mydatetime+'.tsv' , sep='\t',  index=False)
