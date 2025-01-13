@@ -97,23 +97,33 @@ def process_and_harmonize(dataframe_column):
         normalized_phrases = [normalize_text(phrase) for phrase in unique_phrases if isinstance(phrase, str)]
         # Tokenize and group by first letter
         collapsed_dict = defaultdict(list)
+        seen_words = set()
         for phrase in normalized_phrases:
-            first_letter = phrase[0]
-            collapsed_dict[first_letter].append(phrase)
-        # Create a dictionary with the shortest phrase as the representative when lengths differ
-        merged_dict = {}
-        for key, values in collapsed_dict.items():
-            grouped = defaultdict(list)
-            for phrase in values:
-                grouped[len(phrase)].append(phrase)
-            for length, group in grouped.items():
-                if len(group) > 1:  # Same-length items stay in separate lists
-                    for item in group:
-                        merged_dict[item] = [item]
-                else:  # Choose the shortest representative among different lengths
-                    if group:
-                        shortest = min(group, key=len)
-                        merged_dict[shortest] = values
+            words = phrase.split()
+            for word in words:
+                if any(word in seen_word or seen_word in word for seen_word in seen_words):
+                    collapsed_dict[word].append(phrase)
+                    break
+            else:
+                if words:
+                    collapsed_dict[words[0]].append(phrase)
+                    seen_words.update(words)
+        # Merge by first letter and choose the longest key
+        merged_dict = defaultdict(list)
+        seen_keys = set()
+        for key in list(collapsed_dict.keys()):
+            if key in seen_keys:
+                continue
+            merged_key = key
+            merged_values = collapsed_dict[key]
+            for other_key in list(collapsed_dict.keys()):
+                if other_key != key and other_key[:1] == key[:1]:
+                    merged_values.extend(collapsed_dict[other_key])
+                    seen_keys.add(other_key)
+                    if len(other_key) > len(merged_key):
+                        merged_key = other_key
+            merged_dict[merged_key] = merged_values
+            seen_keys.add(key)
         return merged_dict
     def replace_with_representative(value, phrase_dict):
         """
