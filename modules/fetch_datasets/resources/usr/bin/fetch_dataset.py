@@ -277,21 +277,31 @@ class FetchData(object):
             for df_name in df_dict:
                 df = df_dict[df_name]
                 df['STUDY_NAME'] = re.search(r'(?<=Data\/)(.*?)(\/data)', df_name).group(1)
-            # need to remove possible duplicate name columns
-            for df in df_dict.values():
+                # Standardize datatypes for critical columns (if they exist)
+                if 'PATIENT_ID' in df.columns:
+                    df['PATIENT_ID'] = df['PATIENT_ID'].astype(str)
+                if 'SAMPLE_ID' in df.columns:
+                    df['SAMPLE_ID'] = df['SAMPLE_ID'].astype(str)
                 dfs.append(df)
-                for df in dfs:
-                    df = df.loc[:, ~df.columns.duplicated(keep='first')]
-                    dfs_to_concat.append(df)
+            print('Concat DF')
+            for df in dfs:
+                print(df)
+                df = df.loc[:, ~df.columns.duplicated(keep='first')]
+                dfs_to_concat.append(df)
             concatinated_df = pd.concat(dfs_to_concat, ignore_index = True)
             concatinated_df = concatinated_df.filter(filterCols)
-            print('shape of data')
-            print(concatinated_df.shape)
+            print('Here is before remove dups')
+            print(concatinated_df.head())
             # Drop rows without a unique combination of 'patient' and 'sample_id'
             if 'PATIENT_ID' in concatinated_df.columns and 'SAMPLE_ID' in concatinated_df.columns:
                 concatinated_df = concatinated_df[~concatinated_df.duplicated(subset=['PATIENT_ID', 'SAMPLE_ID'], keep=False)]
-            print('New shape')
-            print(concatinated_df.shape)
+                print('Here are the types')
+                print(concatinated_df['PATIENT_ID'].dtype)
+                print(concatinated_df['SAMPLE_ID'].dtype)
+                print('And after....')
+                print(concatinated_df.head())
+                #concatinated_df['PATIENT_ID'] = concatinated_df['PATIENT_ID'].astype(str)
+                #concatinated_df['SAMPLE_ID'] = concatinated_df['SAMPLE_ID'].astype(str)
           #  combined_df = concatinated_df.drop_duplicates()
             return concatinated_df
         change_names(patientSets, result)
@@ -371,9 +381,12 @@ class FetchData(object):
             mutDF = pd.crosstab( all_mut_data_cp['TUMOR_SAMPLE_BARCODE'], all_mut_data_cp['MUT_CONSEQUENCE']).reindex(all_mut_data_cp['TUMOR_SAMPLE_BARCODE'], fill_value=np.nan)
             all_mut_data_cp.drop(['HUGO_SYMBOL','MUT_CONSEQUENCE','CONSEQUENCE'], axis=1, inplace=True)
             all_mut_data_cp.drop_duplicates(inplace=True)
-        else:
+        #else:
+        elif 'HUGO_SYMBOL'  in keep_feats
             mutDF = pd.crosstab( all_mut_data['TUMOR_SAMPLE_BARCODE'], all_mut_data['HUGO_SYMBOL']).reindex(all_mut_data['TUMOR_SAMPLE_BARCODE'], fill_value=np.nan)
             all_mut_data.drop('HUGO_SYMBOL', axis=1, inplace=True)
+            all_mut_data_cp = all_mut_data.drop_duplicates(inplace=False)
+        else: 
             all_mut_data_cp = all_mut_data.drop_duplicates(inplace=False)
         # Try dropping columns with NaN values in the column names first
         try:
@@ -458,16 +471,6 @@ class FetchData(object):
                     harmonized_df[column] = new_values
                 #Step 1: Extract all words from the column
                 harmonized_df[column] = process_and_harmonize(harmonized_df[column])
-#                all_phrases = harmonized_df[column].tolist()
-                # Step 2: Ensure each sublist is a list of strings
- #               checked_phrases = [sublist if isinstance(sublist, list) else [sublist] for sublist in all_phrases]
-                # Step 3: Flatten the values - skip NaN values
-                # If the sublist is iterable (e.g., list), process its items - Join lists or tuples into a string, skip float/NaN   
-  #              flattened_phrases = [item if isinstance(item, str) else ' '.join(map(str, item)) for sublist in checked_phrases for item in sublist if not pd.isna(item)]
-              #  normalized_phrases = [fix_text(s) for s in flattened_phrases]
-                # Step 4: Group similar values
-   #             replacements = group_replace(flattened_phrases)
-    #            harmonized_df[column] = replace_with_grouped(harmonized_df[column], replacements)
         return harmonized_df
 
 def Harmonize(self, *args):
