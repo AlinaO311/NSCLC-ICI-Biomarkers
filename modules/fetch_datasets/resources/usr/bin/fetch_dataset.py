@@ -100,14 +100,19 @@ def process_and_harmonize(dataframe_column):
         seen_words = set()
         for phrase in normalized_phrases:
             words = phrase.split()
+            grouped = False
             for word in words:
-                if any(word in seen_word or seen_word in word for seen_word in seen_words):
-                    collapsed_dict[word].append(phrase)
+                for seen_word in seen_words:
+                    if word in seen_word or seen_word in word:
+                        collapsed_dict[seen_word].append(phrase)
+                        grouped = True
+                        break
+                if grouped:
                     break
-            else:
-                if words:
-                    collapsed_dict[words[0]].append(phrase)
-                    seen_words.update(words)
+            if not grouped and words:
+                first_word = words[0]
+                collapsed_dict[first_word].append(phrase)
+                seen_words.add(first_word)
         # Merge by first letter and choose the longest key
         merged_dict = defaultdict(list)
         seen_keys = set()
@@ -305,14 +310,6 @@ class FetchData(object):
             # Drop rows without a unique combination of 'patient' and 'sample_id'
             if 'PATIENT_ID' in concatinated_df.columns and 'SAMPLE_ID' in concatinated_df.columns:
                 concatinated_df = concatinated_df[~concatinated_df.duplicated(subset=['PATIENT_ID', 'SAMPLE_ID'], keep=False)]
-                print('Here are the types')
-                print(concatinated_df['PATIENT_ID'].dtype)
-                print(concatinated_df['SAMPLE_ID'].dtype)
-                print('And after....')
-                print(concatinated_df.head())
-                #concatinated_df['PATIENT_ID'] = concatinated_df['PATIENT_ID'].astype(str)
-                #concatinated_df['SAMPLE_ID'] = concatinated_df['SAMPLE_ID'].astype(str)
-          #  combined_df = concatinated_df.drop_duplicates()
             return concatinated_df
         change_names(patientSets, result)
         change_names(sampleSets, result)
@@ -392,7 +389,7 @@ class FetchData(object):
             all_mut_data_cp.drop(['HUGO_SYMBOL','MUT_CONSEQUENCE','CONSEQUENCE'], axis=1, inplace=True)
             all_mut_data_cp.drop_duplicates(inplace=True)
         #else:
-        elif 'HUGO_SYMBOL'  in keep_feats
+        elif 'HUGO_SYMBOL'  in keep_feats:
             mutDF = pd.crosstab( all_mut_data['TUMOR_SAMPLE_BARCODE'], all_mut_data['HUGO_SYMBOL']).reindex(all_mut_data['TUMOR_SAMPLE_BARCODE'], fill_value=np.nan)
             all_mut_data.drop('HUGO_SYMBOL', axis=1, inplace=True)
             all_mut_data_cp = all_mut_data.drop_duplicates(inplace=False)
